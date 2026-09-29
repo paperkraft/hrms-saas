@@ -1,0 +1,38 @@
+Custom Override (Manual): If you enter a value greater than 0 in the Custom PF field within the "Configure Salary Structure" popup, the system will completely bypass the formula and use your exact manual amount.
+
+Automatic Formula (Standard 12%): If the Custom PF field is left at 0 (the default), the system automatically calculates PF as 12% of the Basic Salary, but the basic salary used in this calculation is capped at a maximum of ₹15,000.
+
+Example A (Basic is under 15k): If an employee's Basic Salary is ₹10,000, the PF deducted is 12% of 10,000 = ₹1,200.
+Example B (Basic is over 15k): If the Basic Salary is ₹25,000, the calculation hits the ceiling, so the PF deducted is 12% of 15,000 = ₹1,800.
+(Note: The basic salary is derived dynamically, factoring in the time factor: Current Monthly Salary * 50% * Time Factor).
+
+
+npm approve-scripts --allow-scripts-pending
+ 
+# 1. Generate Prisma Client & Sync Database
+npx prisma generate
+npx prisma db push
+
+# 2. Synchronize System Roles & Default Permissions
+npx tsx scripts/seed-system-roles.ts
+
+# 3. Create Production Build
+npm run build
+
+# 4. Start Application
+npm run start
+# or via PM2 / Standalone runner:
+# npm run build:standalone
+
+How to Run
+Option 1: Using npm
+npm run deploy:standalone
+
+Option 2: Running the PowerShell script directly
+powershell -ExecutionPolicy Bypass -File scripts/deploy-standalone.ps1
+
+Optional: Deploying to a custom destination
+powershell -ExecutionPolicy Bypass -File scripts/deploy-standalone.ps1 -Destination "C:\Custom\Path"
+
+Optional: Copying existing build without rebuilding
+powershell -ExecutionPolicy Bypass -File scripts/deploy-standalone.ps1 -SkipBuild

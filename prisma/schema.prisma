@@ -1,0 +1,1111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Platform & Multi-Tenant Entities ────────────────────────────────────────
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  ARCHIVED
+}
+
+enum SubscriptionTier {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+  CUSTOM
+}
+
+model Tenant {
+  id                    String           @id @default(cuid())
+  slug                  String           @unique // e.g. "sigma", "infra", "tenant-1"
+  name                  String           // e.g. "Sigma Infraplan"
+  legalName             String?          // e.g. "SIGMA INFRAPLAN ENGINEERING PVT. LTD."
+  address               String?
+  tagline               String?
+  logoUrl               String?
+  primaryColor          String?          @default("#2563eb")
+  
+  // Status & Subscription Limits
+  status                TenantStatus     @default(ACTIVE)
+  plan                  SubscriptionTier @default(STARTER)
+  maxUsers              Int              @default(50)
+  driveQuotaBytes       Float            @default(53687091200) // 50 GB default
+  
+  // Feature Toggles (Enable/Disable per tenant)
+  payrollEnabled        Boolean          @default(true)
+  geofencingEnabled     Boolean          @default(true)
+  driveEnabled          Boolean          @default(true)
+  fileShareEnabled      Boolean          @default(true)
+  taskCommitmentEnabled Boolean          @default(true)
+  
+  // Custom Email / SMTP settings (optional per tenant)
+  smtpHost              String?
+  smtpPort              Int?
+  smtpUser              String?
+  smtpPass              String?
+  smtpFrom              String?
+  
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  // Tenant-scoped relations
+  users                 User[]
+  departments           Department[]
+  locations             Location[]
+  projects              Project[]
+  driveItems            DriveItem[]
+  fileShares            FileShare[]
+  announcements         Announcement[]
+  roleDefinitions       RoleDefinition[]
+  activityLogs          ActivityLog[]
+  systemConfig          SystemConfig?
+  taskMasters           TaskMaster[]
+  recurringSchedules    RecurringTaskSchedule[]
+  tasks                 Task[]
+  milestones            Milestone[]
+  attendances           Attendance[]
+  leaveRequests         LeaveRequest[]
+  leaveBalances         LeaveBalance[]
+  salaryStructures      SalaryStructure[]
+  payrollRecords        PayrollRecord[]
+  allowances            Allowance[]
+  overtimeRequests      OvertimeRequest[]
+  notifications         Notification[]
+  pushSubscriptions     PushSubscription[]
+  todos                 Todo[]
+  workloadSnapshots     WorkloadSnapshot[]
+  attendanceGrievances  AttendanceGrievance[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model SuperAdmin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Core Domain Models (Tenant-Scoped) ──────────────────────────────────────
+
+model User {
+  id                       String                  @id @default(cuid())
+  tenantId                 String
+  tenant                   Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                     String?
+  email                    String
+  password                 String?
+  role                     Role                    @default(EMPLOYEE)
+  roleDefinitionId         String?
+  assignedRoleIds          String[]                @default([])
+  roleDefinition           RoleDefinition?         @relation(fields: [roleDefinitionId], references: [id])
+  managerId                String?
+  departmentId             String?
+  locationId               String?
+  workMode                 WorkMode                @default(OFFICE)
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  autoPunchOutCount        Int                     @default(0)
+  minOfficeDays            Int                     @default(0)
+  dateOfBirth              DateTime?               @db.Date
+  joiningDate              DateTime?               @db.Date
+  phoneNumber              String?
+  designation              String?
+  bloodGroup               String?
+  avatarUrl                String?
+  gender                   String?                 @default("MALE")
+  employeeCode             String?
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  attendances              Attendance[]
+  ledDepartments           Department[]            @relation("DepartmentLeader")
+  departments              UserDepartment[]
+  leaveBalances            LeaveBalance[]
+  leaveRequests            LeaveRequest[]
+  allowances               Allowance[]
+  overtimeRequests         OvertimeRequest[]
+  announcements            Announcement[]
+  department               Department?             @relation("DepartmentMembers", fields: [departmentId], references: [id])
+  assignedTasks            Task[]                  @relation("TaskAssignee")
+  createdTasks             Task[]                  @relation("TaskCreator")
+  proposedTasks            Task[]                  @relation("TaskProposer")
+  reviewedTasks            Task[]                  @relation("TaskReviewer")
+  taskComments             TaskComment[]
+  manager                  User?                   @relation("ManagerToEmployee", fields: [managerId], references: [id], onUpdate: NoAction)
+  employees                User[]                  @relation("ManagerToEmployee")
+  location                 Location?               @relation(name: "PrimaryLocation", fields: [locationId], references: [id])
+  additionalLocations      Location[]              @relation(name: "AdditionalLocations")
+  notifications            Notification[]
+  pushSubscriptions        PushSubscription[]
+  activityLogs             ActivityLog[]
+  todos                    Todo[]
+  workloadSnapshots        WorkloadSnapshot[]
+  salaryStructure          SalaryStructure?
+  payrollRecords           PayrollRecord[]
+  recurringSchedules       RecurringTaskSchedule[]
+  uploadedShares           FileShare[]             @relation("FileShareUploader")
+  receivedShares           FileShare[]             @relation("FileShareRecipients")
+  attendanceGrievances     AttendanceGrievance[]
+  announcementReads        AnnouncementRead[]
+  allowedMenus             String[]                @default([])
+  status                   EmploymentStatus        @default(ACTIVE)
+  resignationDate          DateTime?               @db.Date
+  resignationReason        String?
+  rejoiningDate            DateTime?               @db.Date
+  driveQuotaBytes          Float?
+  isExternal               Boolean                 @default(false)
+  projectSharesReceived    ProjectShare[]          @relation("ProjectSharesReceived")
+  projectSharesGranted     ProjectShare[]          @relation("ProjectSharesGranted")
+
+  // Drive Relations
+  ownedDriveItems          DriveItem[]             @relation("DriveItemOwner")
+  modifiedDriveItems       DriveItem[]             @relation("DriveItemModifier")
+  trashedDriveItems        DriveItem[]             @relation("DriveItemTrashedBy")
+  starredDriveItems        DriveStarredItem[]
+  drivePermissions         DriveItemPermission[]
+  driveVersions            DriveVersion[]
+  driveActivities          DriveActivity[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([departmentId])
+  @@index([role])
+  @@index([roleDefinitionId])
+  @@index([managerId])
+  @@index([status])
+  @@index([status, resignationDate])
+  @@index([joiningDate])
+}
+
+model RoleDefinition {
+  id                String   @id @default(cuid())
+  tenantId          String?
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name              String
+  code              String
+  description       String?
+  isSystem          Boolean  @default(false)
+  isPayrollEligible Boolean  @default(true)
+  isExternal        Boolean  @default(false)
+  allowedMenus      String[] @default([])
+  permissions       String[] @default([])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  users             User[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model UserDepartment {
+  id           String     @id @default(cuid())
+  userId       String
+  departmentId String
+  isPrimary    Boolean    @default(false)
+  isLeader     Boolean    @default(false)
+  roleInDept   String?
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([userId, departmentId])
+  @@index([userId])
+  @@index([departmentId])
+}
+
+model Location {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  address          String?
+  startTime        String   @default("09:30")
+  endTime          String   @default("18:00")
+  lat              Float?
+  lng              Float?
+  radiusMeters     Int      @default(40)
+  graceTimeMinutes Int      @default(10)
+  isRemote         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  users            User[]   @relation(name: "PrimaryLocation")
+  permittedUsers   User[]   @relation(name: "AdditionalLocations")
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Department {
+  id                 String                  @id @default(cuid())
+  tenantId           String
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?
+  teamLeaderId       String?
+  parentDepartmentId String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  teamLeader         User?                   @relation("DepartmentLeader", fields: [teamLeaderId], references: [id])
+  parentDepartment   Department?             @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
+  subDepartments     Department[]            @relation("DepartmentHierarchy")
+  members            User[]                  @relation("DepartmentMembers")
+  userDepartments    UserDepartment[]
+  announcements      Announcement[]
+  taskMasters        TaskMaster[]
+  tasks              Task[]
+  recurringSchedules RecurringTaskSchedule[]
+  sharedFiles        FileShare[]             @relation("FileShareDepartments")
+  drivePermissions   DriveItemPermission[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Attendance {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId            String
+  date              DateTime  @db.Date
+  punchIn           DateTime
+  punchOut          DateTime?
+  isLate            Boolean   @default(false)
+  isLateSpecialCase Boolean   @default(false)
+  punchInLat        Float?
+  punchInLng        Float?
+  punchOutLat       Float?
+  punchOutLng       Float?
+  ipAddress         String?
+  isOutsideOffice   Boolean   @default(false)
+  isAutoPunchOut    Boolean   @default(false)
+  isEarlyLogoff     Boolean   @default(false)
+  isHalfDay         Boolean   @default(false)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, date])
+  @@index([tenantId])
+  @@index([userId, punchOut, date])
+  @@index([date])
+  @@index([isOutsideOffice])
+}
+
+model LeaveRequest {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String
+  startDate   DateTime
+  endDate     DateTime
+  duration    LeaveDuration
+  category    LeaveCategory
+  status      LeaveStatus   @default(PENDING)
+  reason      String?
+  managerNote String?
+  startTime   String?
+  endTime     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  halfDayType String?
+  systemNote  String?
+  leaveType   LeaveType?
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId, status])
+  @@index([startDate, endDate, status])
+}
+
+model LeaveBalance {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId              String
+  month               Int
+  year                Int
+  remainingFull       Float    @default(2.0)
+  remainingShort      Int      @default(1)
+  carriedForward      Float    @default(0.0)
+  encashed            Float    @default(0.0)
+  semiAnnualRemaining Int      @default(3)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  fullTaken           Float    @default(0.0)
+  semiAnnualTaken     Float    @default(0.0)
+  shortTaken          Int      @default(0)
+  unpaidTaken         Float    @default(0.0)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, month, year])
+  @@index([tenantId])
+}
+
+model SystemConfig {
+  id                           String   @id @default(cuid())
+  tenantId                     String   @unique
+  tenant                       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  defaultOfficeStartTime       String   @default("09:00")
+  defaultOfficeEndTime         String   @default("18:00")
+  defaultGraceTimeMinutes      Int      @default(15)
+  updatedAt                    DateTime @updatedAt
+  autoPunchOutDelayHours       Int      @default(2)
+  autoPunchOutEnabled          Boolean  @default(true)
+  autoPunchOutWarningThreshold Int      @default(3)
+  firstHalfEndTime             String   @default("13:30")
+  lateMarkAllowedCount         Int      @default(3)
+  lateMarkEnabled              Boolean  @default(true)
+  secondHalfStartTime          String   @default("13:30")
+  semiAnnualCycleStartMonth    Int      @default(4)
+  semiAnnualPolicyEnabled      Boolean  @default(true)
+  workingDaysPerMonth          Int      @default(26)
+  customPfCapLimit             Float    @default(15000)
+  customPfRatePercentage       Float    @default(12.0)
+  dailyAllowanceRate           Float    @default(350.0)
+  esicEmployerRatePercentage   Float    @default(3.25)
+  esicEmployeeRatePercentage   Float    @default(0.75)
+  esicGrossLimitMonthly        Float    @default(21000)
+  professionalTaxMonthly       Float    @default(200.0)
+  professionalTaxFebAmount     Float    @default(300.0)
+  maxGeofenceToleranceRadius   Int      @default(50)
+  enableOvertimeModule         Boolean  @default(true)
+  enableGrievanceModule        Boolean  @default(true)
+}
+
+model AttendanceGrievance {
+  id             String          @id @default(cuid())
+  tenantId       String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime        @db.Date
+  reason         String
+  status         GrievanceStatus @default(PENDING)
+  resolutionNote String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([tenantId])
+  @@index([userId, status])
+  @@index([date])
+}
+
+model Allowance {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Float
+  type        String
+  description String?
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([userId, date])
+}
+
+model OvertimeRequest {
+  id             String         @id @default(cuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime       @db.Date
+  hours          Float
+  reason         String
+  status         ApprovalStatus @default(PENDING)
+  managerComment String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([tenantId])
+  @@index([userId, date])
+}
+
+model TaskMaster {
+  id                 String                  @id @default(cuid())
+  tenantId           String
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?
+  departmentId       String?
+  department         Department?             @relation(fields: [departmentId], references: [id])
+  defaultDuration    Float?                  // In days
+  priority           Priority                @default(MEDIUM)
+  activity           String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  tasks              Task[]
+  recurringSchedules RecurringTaskSchedule[]
+
+  @@index([tenantId])
+  @@index([departmentId])
+}
+
+model RecurringTaskSchedule {
+  id           String      @id @default(cuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectId    String
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedToId String?
+  assignedTo   User?       @relation(fields: [assignedToId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  taskMasterId String?
+  taskMaster   TaskMaster? @relation(fields: [taskMasterId], references: [id])
+
+  frequency    String // 'MONTHLY', 'WEEKLY', 'DAILY'
+  dayOfMonth   Int?
+  dayOfWeek    Int?
+
+  isActive     Boolean     @default(true)
+  lastRunAt    DateTime?
+  nextRunAt    DateTime
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([tenantId])
+  @@index([projectId])
+}
+
+model Project {
+  id                 String                  @id @default(cuid())
+  tenantId           String
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  code               String?
+  description        String?
+  status             ProjectStatus           @default(ACTIVE)
+  startDate          DateTime?
+  endDate            DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  tasks              Task[]
+  milestones         Milestone[]
+  activityLogs       ActivityLog[]
+  recurringSchedules RecurringTaskSchedule[]
+  shares             ProjectShare[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model ProjectShare {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("ProjectSharesReceived", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy String
+  grantor   User     @relation("ProjectSharesGranted", fields: [grantedBy], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Task {
+  id                              String              @id @default(cuid())
+  tenantId                        String
+  tenant                          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  taskNumber                      Int                 @default(autoincrement())
+  name                            String
+  description                     String?
+  projectId                       String
+  project                         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedToId                    String?
+  assignedTo                      User?               @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdById                     String?
+  creator                         User?               @relation("TaskCreator", fields: [createdById], references: [id])
+  proposedById                    String?
+  proposedBy                      User?               @relation("TaskProposer", fields: [proposedById], references: [id])
+  departmentId                    String?
+  department                      Department?         @relation(fields: [departmentId], references: [id])
+  reviewerId                      String?
+  reviewer                        User?               @relation("TaskReviewer", fields: [reviewerId], references: [id])
+  taskMasterId                    String?
+  taskMaster                      TaskMaster?         @relation(fields: [taskMasterId], references: [id], onDelete: SetNull)
+  team                            String?
+  activity                        String?
+  status                          TaskStatus          @default(TODO)
+  priority                        Priority            @default(MEDIUM)
+  progress                        Int                 @default(0)
+  plannedDuration                 Float?
+  plannedStart                    DateTime?
+  plannedEnd                      DateTime?
+  actualStart                     DateTime?
+  submittedAt                     DateTime?
+  actualEnd                       DateTime?
+  subTlApproved                   Boolean             @default(false)
+  subTlApprovalComment            String?
+  subTlRating                     Int?
+  tlApproved                      Boolean             @default(false)
+  adminApproved                   Boolean             @default(false)
+  tlApprovalComment               String?
+  adminApprovalComment            String?
+  approvalStatus                  ApprovalStatus      @default(PENDING)
+  comments                        TaskComment[]
+  activityLogs                    ActivityLog[]
+  tlRating                        Int?
+  adminRating                     Int?
+  createdAt                       DateTime            @default(now())
+  updatedAt                       DateTime            @updatedAt
+
+  lifecycleStatus                 TaskLifecycleStatus @default(COMMITTED)
+  proposedAt                      DateTime?
+  employeeResponseAt              DateTime?
+  committedAt                     DateTime?
+  committedByOverride             Boolean             @default(false)
+  negotiationCount                Int                 @default(0)
+  assigneeCapacityAtAssignment    Int?
+  assigneeActiveTasksAtAssignment Int?
+
+  attachments                     Json?
+  mentionedUserIds                String[]
+
+  @@unique([tenantId, taskNumber])
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model TaskComment {
+  id               String    @id @default(cuid())
+  taskId           String
+  task             Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content          String
+  createdAt        DateTime  @default(now())
+
+  type             String    @default("COMMENT")
+  attachments      Json?
+  mentionedUserIds String[]
+  proposedEnd      DateTime?
+  isPinned         Boolean   @default(false)
+
+  @@index([taskId])
+  @@index([userId])
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  dueDate     DateTime?
+  actualDate  DateTime?
+  status      MilestoneStatus @default(PENDING)
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([tenantId])
+  @@index([projectId])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model Todo {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  title     String
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model WorkloadSnapshot {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  takenAt        DateTime @default(now())
+  activeTasks    Int
+  committedTasks Int
+  estimatedHours Float
+  capacityPct    Int
+  overdueTasks   Int
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model SalaryStructure {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  grossSalary       Float    @default(0)
+  annualBonus       Float    @default(0)
+  basic             Float    @default(0)
+  hra               Float    @default(0)
+  conveyance        Float    @default(0)
+  consolidated      Float    @default(0)
+  medical           Float    @default(0)
+  childrenEducation Float    @default(0)
+  childrenHostel    Float    @default(0)
+  allowance         Float    @default(0)
+
+  providentFund     Float    @default(0)
+  esic              Float    @default(0)
+  tds               Float    @default(0)
+
+  pfAccountNumber   String?
+  bankName          String?
+  accountNumber     String?
+  panNumber         String?
+  ifscCode          String?
+
+  excludeFromPayroll Boolean @default(false)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model PayrollRecord {
+  id                   String        @id @default(cuid())
+  tenantId             String
+  tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId               String
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month                Int
+  year                 Int
+
+  presentDays          Float
+  paidLeave            Float
+  unpaidLeave          Float
+  extraDays            Float
+
+  averageWorkingHours  Float         @default(0)
+  timeFactor           Float         @default(1.0)
+
+  grossSalary          Float         @default(0)
+  basic                Float         @default(0)
+  hra                  Float         @default(0)
+  conveyance           Float         @default(0)
+  consolidated         Float         @default(0)
+  medical              Float         @default(0)
+  childrenEducation    Float         @default(0)
+  childrenHostel       Float         @default(0)
+  reimbursement        Float         @default(0)
+  allowance            Float         @default(0)
+  bonus                Float         @default(0)
+  subtotalAdditions    Float         @default(0)
+
+  professionalTax      Float         @default(0)
+  providentFund        Float         @default(0)
+  advance              Float         @default(0)
+  tds                  Float         @default(0)
+  esic                 Float         @default(0)
+  unpaidLeaveDeduction Float         @default(0)
+  subtotalDeductions   Float         @default(0)
+
+  netSalary            Float         @default(0)
+  overtimePay          Float         @default(0)
+
+  status               PayrollStatus @default(DRAFT)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@unique([tenantId, userId, month, year])
+  @@index([tenantId])
+}
+
+// ── File Share Model (Dedicated Retained Feature) ───────────────────────────
+
+model FileShare {
+  id             String       @id @default(cuid())
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploaderId     String
+  uploader       User         @relation("FileShareUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  fileName       String
+  storageKey     String
+  mimeType       String
+  size           Int
+  bucket         String?      @default("file-shares")
+  isFolder       Boolean      @default(false)
+
+  expiresAt      DateTime?
+  maxViews       Int?
+  currentViews   Int          @default(0)
+
+  sharedWith     User[]       @relation("FileShareRecipients")
+  sharedWithDepts Department[] @relation("FileShareDepartments")
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@index([uploaderId])
+  @@index([expiresAt])
+}
+
+// ── Google Drive-Style Document Management Models ───────────────────────────
+
+model DriveItem {
+  id               String                @id @default(cuid())
+  tenantId         String
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  type             DriveItemType         @default(FILE)
+  scope            DriveScope            @default(ORGANIZATION_LIBRARY)
+
+  mimeType         String?
+  extension        String?
+  size             Float                 @default(0)
+  bucket           String?               @default("library")
+  storageKey       String?
+
+  parentId         String?
+  parent           DriveItem?            @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children         DriveItem[]           @relation("FolderHierarchy")
+  path             String                @default("/")
+  depth            Int                   @default(0)
+  color            String?
+
+  ownerId          String
+  owner            User                  @relation("DriveItemOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdBy        String
+  lastModifiedById String?
+  lastModifiedBy   User?                 @relation("DriveItemModifier", fields: [lastModifiedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  isStarred        Boolean               @default(false)
+  isTrashed        Boolean               @default(false)
+  trashedAt        DateTime?
+  trashedById      String?
+  trashedBy        User?                 @relation("DriveItemTrashedBy", fields: [trashedById], references: [id], onDelete: SetNull)
+
+  description      String?
+  tags             String[]              @default([])
+  version          Int                   @default(1)
+
+  legacyId         String?
+  legacySource     String?
+
+  permissions      DriveItemPermission[]
+  starredBy        DriveStarredItem[]
+  versions         DriveVersion[]
+  activities       DriveActivity[]
+
+  @@index([tenantId, scope, isTrashed, parentId, type])
+  @@index([tenantId, scope, isTrashed, type, updatedAt])
+  @@index([tenantId, ownerId, isTrashed])
+  @@index([tenantId, path])
+  @@index([tenantId, name])
+  @@index([parentId])
+  @@index([scope])
+  @@index([isStarred])
+}
+
+model DriveStarredItem {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driveItemId String
+  driveItem   DriveItem @relation(fields: [driveItemId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, driveItemId])
+  @@index([userId])
+}
+
+model DriveItemPermission {
+  id           String           @id @default(cuid())
+  driveItemId  String
+  driveItem    DriveItem        @relation(fields: [driveItemId], references: [id], onDelete: Cascade)
+
+  userId       String?
+  user         User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departmentId String?
+  department   Department?      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  accessLevel  DriveAccessLevel @default(VIEWER)
+  isPublic     Boolean          @default(false)
+  publicToken  String?          @unique
+  expiresAt    DateTime?
+  passwordHash String?
+
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([driveItemId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([publicToken])
+}
+
+model DriveVersion {
+  id           String    @id @default(cuid())
+  driveItemId  String
+  driveItem    DriveItem @relation(fields: [driveItemId], references: [id], onDelete: Cascade)
+  version      Int
+  storageKey   String
+  bucket       String
+  size         Float     @default(0)
+  mimeType     String?
+  uploadedById String
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  changeNotes  String?
+  createdAt    DateTime  @default(now())
+
+  @@index([driveItemId])
+}
+
+model DriveActivity {
+  id          String     @id @default(cuid())
+  driveItemId String?
+  driveItem   DriveItem? @relation(fields: [driveItemId], references: [id], onDelete: SetNull)
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action      String
+  details     String?
+  createdAt   DateTime   @default(now())
+
+  @@index([driveItemId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Announcement {
+  id           String             @id @default(cuid())
+  tenantId     String
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title        String
+  content      String
+  priority     Priority           @default(LOW)
+  createdById  String
+  creator      User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  departmentId String?
+  department   Department?        @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  reads        AnnouncementRead[]
+
+  @@index([tenantId])
+  @@index([createdById])
+  @@index([departmentId])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([userId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("GENERAL")
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId, read])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+// ── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEAM_LEADER
+  EMPLOYEE
+}
+
+enum WorkMode {
+  OFFICE
+  REMOTE
+  HYBRID
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  RESIGNED
+  TERMINATED
+  INACTIVE
+}
+
+enum LeaveDuration {
+  FULL_DAY
+  HALF_DAY
+  SHORT_LEAVE
+}
+
+enum LeaveCategory {
+  PAID
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeaveType {
+  CASUAL
+  MEDICAL
+  PRIVILEGE
+  HALF_DAY
+  SHORT_LEAVE
+  SPECIAL_LEAVE
+}
+
+enum GrievanceStatus {
+  PENDING
+  RESOLVED
+  REJECTED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+  ON_HOLD
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TaskLifecycleStatus {
+  PROPOSED
+  NEGOTIATING
+  COMMITTED
+}
+
+enum ReassignmentReason {
+  CAPACITY_OVERLOAD
+  MISSING_DEPENDENCY
+  SKILL_MISMATCH
+  LEAVE_CONFLICT
+  OTHER
+}
+
+enum MilestoneStatus {
+  PENDING
+  COMPLETED
+}
+
+enum PayrollStatus {
+  DRAFT
+  FINALIZED
+  PAID
+}
+
+enum DriveItemType {
+  FILE
+  FOLDER
+}
+
+enum DriveScope {
+  ORGANIZATION_LIBRARY
+  PROJECT
+  PERSONAL
+  DEPARTMENT
+}
+
+enum DriveAccessLevel {
+  VIEWER
+  COMMENTER
+  EDITOR
+  ADMIN
+}

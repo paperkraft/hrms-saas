@@ -1,0 +1,220 @@
+# 1. Automatic trigger on 'main'
+trigger:
+  branches:
+    include:
+      - main
+
+pr: none
+
+# 2. Define inputs
+parameters:
+  - name: releaseVersion
+    displayName: "Release Version (e.g., v1.0.2)"
+    type: string
+    default: "v1.0.0"
+
+name: $(Date:yyyyMMdd)$(Rev:.r)-$(parameters.releaseVersion)
+
+# ========================================================
+# THE POLYREPO VARIABLES (Change these per repository!)
+# ========================================================
+variables:
+  nodeVersion: "20.x" # Updated to a stable LTS version (22.x is very new)
+  appName: "HRMS_UI"
+  deployPath: 'C:\SigmaToolbox\Frontend\HRMS'
+  backupPath: 'C:\SigmaToolbox\Frontend\HRMS_Backups'
+  envFilePath: 'C:\SigmaToolbox\Frontend\EnvironmentFiles\HRMS\.env.production'
+  PM2_HOME: 'C:\SigmaToolbox\Frontend\.pm2'
+  port: "5000"
+
+stages:
+  # ========================================================
+  # STAGE 1: BUILD
+  # ========================================================
+  - stage: Build
+    displayName: "Build Next.js App"
+    pool:
+      name: "Development Agent"
+    jobs:
+      - job: BuildJob
+        displayName: "Compile and Package"
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: "Install Node.js"
+
+          - script: npm ci
+            displayName: "Install Dependencies"
+
+          - task: PowerShell@2
+            displayName: "Inject Environment for Build"
+            inputs:
+              targetType: "inline"
+              pwsh: false
+              script: |
+                if (Test-Path "$(envFilePath)") {
+                    Copy-Item "$(envFilePath)" ".env" -Force
+                    Copy-Item "$(envFilePath)" ".env.production" -Force
+                    Write-Host "Success: Injected environment files."
+                } else {
+                    Write-Warning "Warning: Could not find .env file at $(envFilePath)."
+                }
+
+          - script: npx prisma db push
+            displayName: "Push Prisma Schema"
+
+          - script: npx prisma generate
+            displayName: "Generate Prisma Client"
+
+          - script: npm run build
+            displayName: "Build Next.js (Standalone)"
+
+          - powershell: |
+              $dest = "$(Build.ArtifactStagingDirectory)\drop"
+              if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+              New-Item -Path $dest -ItemType Directory -Force | Out-Null
+
+              # 1. Copy Standalone Output
+              Copy-Item ".next\standalone\*" "$dest" -Recurse -Force
+
+              # CRITICAL FIX FOR NEXT.JS STANDALONE
+              # You must ensure the .next folder exists inside standalone before copying static
+              if (-not (Test-Path "$dest\.next")) { New-Item -Path "$dest\.next" -ItemType Directory -Force | Out-Null }
+              Copy-Item ".next\static" "$dest\.next\static" -Recurse -Force
+              Copy-Item "public" "$dest\public" -Recurse -Force
+              Copy-Item "scripts" "$dest\scripts" -Recurse -Force
+              if (Test-Path "cron.config.js") { Copy-Item "cron.config.js" "$dest\cron.config.js" -Force }
+
+              # 2. Copy the specific .env file from the server path
+              if (Test-Path "$(envFilePath)") {
+                  Copy-Item "$(envFilePath)" "$dest\.env.production" -Force
+                  Write-Host "Success: Packaged .env.production from $(envFilePath)"
+              } else {
+                  Write-Warning "Warning: Could not find .env file at $(envFilePath)"
+              }
+            displayName: "Prepare Artifact Files"
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)\drop'
+              artifact: "$(appName)_Artifact"
+              publishLocation: "pipeline"
+
+  # ========================================================
+  # STAGE 2: DEPLOY
+  # ========================================================
+  - stage: Deploy
+    displayName: "Deploy to Production"
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployIIS
+        displayName: "Release Application"
+        environment: "Production_IIS"
+        pool:
+          name: "Development Agent"
+        timeoutInMinutes: 1440
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: $(appName)_Artifact
+                  displayName: "Download Build Artifact"
+
+                # Backup Logic
+                - powershell: |
+                    $backupDir = "$(backupPath)"
+                    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+                    $zipName = "$(appName)_Backup_$timestamp.zip"
+                    $zipPath = Join-Path $backupDir $zipName
+
+                    if (Test-Path "$(deployPath)") {
+                        Write-Host "Creating backup..."
+                        if (-not (Test-Path $backupDir)) { New-Item -Path $backupDir -ItemType Directory -Force }
+                        Compress-Archive -Path "$(deployPath)\*" -DestinationPath $zipPath -CompressionLevel Fastest -ErrorAction SilentlyContinue
+                        
+                        # Rotate Backups (Keep 3)
+                        $backups = Get-ChildItem -Path $backupDir -Filter "$(appName)_Backup_*.zip" | Sort-Object CreationTime -Descending
+                        if ($backups.Count -gt 3) {
+                            $backups | Select-Object -Skip 3 | Remove-Item -Force
+                        }
+                    }
+                  displayName: "Backup Current Deployment"
+
+                # Stop PM2
+                - powershell: |
+                    pm2 describe $(appName) > $null 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                      pm2 stop $(appName)
+                      pm2 delete $(appName)
+                    }
+                    pm2 describe hr-cron > $null 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                      pm2 stop hr-cron
+                      pm2 delete hr-cron
+                    }
+                  env:
+                    PM2_HOME: $(PM2_HOME)
+                  continueOnError: true
+                  displayName: "Stop PM2"
+
+                # Deploy New Files
+                - powershell: |
+                    if (Test-Path "$(deployPath)") { Remove-Item "$(deployPath)\*" -Recurse -Force }
+                    else { New-Item -Path "$(deployPath)" -ItemType Directory }
+
+                    $artifactSource = "$(Pipeline.Workspace)\$(appName)_Artifact"
+                    Copy-Item "$artifactSource\*" "$(deployPath)" -Recurse -Force
+                  displayName: "Deploy New Build"
+
+                # Start PM2
+                - powershell: |
+                    cd "$(deployPath)"
+                    pm2 start server.js --name "$(appName)" -- -p $(port)
+                    if (Test-Path "cron.config.js") { pm2 start cron.config.js }
+                    pm2 save
+                  env:
+                    PM2_HOME: $(PM2_HOME)
+                  displayName: "Start Application"
+
+                # Health Check
+                - powershell: |
+                    Start-Sleep -Seconds 5
+                    try {
+                      Invoke-WebRequest -Uri "http://localhost:$(port)" -UseBasicParsing
+                      Write-Host "App is healthy."
+                    } catch {
+                      Write-Error "App failed to start."
+                      exit 1
+                    }
+                  displayName: "Health Check"
+
+                # Rollback Logic
+                - powershell: |
+                    Write-Host "Initiating Rollback..."
+                    $backupDir = "$(backupPath)"
+                    $latest = Get-ChildItem -Path $backupDir -Filter "$(appName)_Backup_*.zip" | Sort-Object CreationTime -Descending | Select-Object -First 1
+
+                    if ($latest) {
+                        pm2 stop $(appName)
+                        pm2 delete $(appName)
+                        pm2 stop hr-cron -s > $null 2>&1
+                        pm2 delete hr-cron -s > $null 2>&1
+                        Remove-Item "$(deployPath)\*" -Recurse -Force -ErrorAction SilentlyContinue
+                        Expand-Archive -Path $latest.FullName -DestinationPath "$(deployPath)" -Force
+                        
+                        cd "$(deployPath)"
+                        pm2 start server.js --name "$(appName)" -- -p $(port)
+                        if (Test-Path "cron.config.js") { pm2 start cron.config.js }
+                        pm2 save
+                    }
+                    exit 1
+                  env:
+                    PM2_HOME: $(PM2_HOME)
+                  condition: failed()
+                  displayName: "ROLLBACK"

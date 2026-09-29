@@ -1,0 +1,56 @@
+# Google Drive Architecture & Zero-Data-Loss Migration: Walkthrough
+
+We have transformed the Sigma HRMS Document Management system into a **Google Drive-style Document Management Platform** while preserving 100% of existing documents and metadata.
+
+---
+
+## 1. Migration Results (Zero Data Loss)
+
+The idempotent migration script (`src/scripts/migrate-documents-to-drive.ts`) completed successfully:
+
+- **📚 Company Library Documents**: 603 files migrated into hierarchical folder structures.
+- **🚀 Project Documents**: 10,555 files migrated into hierarchical folder structures.
+- **📁 Total Nested Folders Created**: 1,344 folders generated automatically from existing category paths.
+- **📄 Total Files Managed**: 11,158 files.
+- **💾 Total Storage Data Preserved**: ~146.22 GB mapped with zero MinIO re-uploads or physical moves.
+
+---
+
+## 2. Key Architecture Components Built
+
+### A. Database Schema (`prisma/schema.prisma`)
+- **`DriveItem`**: Self-referencing tree model with `parentId`, materialized `path` (`/root-id/folder-id/`), `depth`, `color`, `scope` (`ORGANIZATION_LIBRARY`, `PROJECT`, `PERSONAL`), `isStarred`, `isTrashed`, `version`.
+- **`DriveStarredItem`**: Per-user bookmarking/starring.
+- **`DriveItemPermission`**: Granular access control for users, departments, and public tokens.
+- **`DriveVersion`**: File revision history tracking.
+- **`DriveActivity`**: Audit trail timeline logging for all item actions.
+
+### B. Server Actions & APIs (`src/actions/drive.ts` & `/api/drive/*`)
+- `getDriveContents`: Query engine with support for scope filtering, search by name, type filtering (PDF, Spreadsheet, Word, Image, Presentation, Archive, Media), sorting, and breadcrumb generation.
+- `createDriveFolder`, `renameDriveItem`, `moveDriveItems` (with recursive subfolder path recalculation).
+- `toggleStarDriveItem`, `trashDriveItems` (soft-delete), `restoreDriveItems`, `deleteDriveItemsPermanently`.
+- `getDriveDownloadUrl` (24-hour presigned URL), `getDriveStorageStats`.
+- Direct MinIO upload via presigned PUT URLs (`/api/drive/presigned-url`) and metadata registration (`/api/drive/confirm-upload`).
+
+### C. Google Drive UI / UX Suite (`src/components/features/drive/*`)
+- **[drive-sidebar.tsx](file:///d:/SV/Live%20projects/hrms/src/components/features/drive/drive-sidebar.tsx)**: Left navigation for Company Library, Project Documents, My Drive, Shared with me, Starred, Recent, Trash, and dynamic Storage Quota Widget.
+- **[drive-topbar.tsx](file:///d:/SV/Live%20projects/hrms/src/components/features/drive/drive-topbar.tsx)**: Global search, file type filters, sorting, Grid/List view switcher, and Details drawer toggle.
+- **[drive-breadcrumbs.tsx](file:///d:/SV/Live%20projects/hrms/src/components/features/drive/drive-breadcrumbs.tsx)**: Interactive breadcrumbs trail with drop target support.
+- **[drive-folder-card.tsx](file:///d:/SV/Live%20projects/hrms/src/components/features/drive/drive-folder-card.tsx)**: Folder card with custom color palette, item count, double-click open, star, and context menu.
+- **[drive-file-card.tsx](file:///d:/SV/Live%20projects/hrms/src/components/features/drive/drive-file-card.tsx)**: Visual preview banners, type badge, size, star toggle, and context menu.
+- **[drive-table-view.tsx](file:///d:/SV/Live%20projects/hrms/src/components/features/drive/drive-table-view.tsx)**: Structured list view with multi-select checkboxes.
+- **[drive-details-panel.tsx](file:///d:/SV/Live%20projects/hrms/src/components/features/drive/drive-details-panel.tsx)**: Right-hand side drawer with "Details" (properties, preview, location) and "Activity" (chronological audit logs).
+- **Modals**:
+  - `NewFolderModal`: Create folder with custom color.
+  - `RenameModal`: Quick rename.
+  - `MoveModal`: Interactive folder tree picker.
+  - `UploadModal`: Drag-and-drop zone with multi-file queue and real-time progress bar.
+  - `FileViewerModal`: High-fidelity preview for PDFs, Excel spreadsheets, Images, Videos, Audio, and Text documents.
+
+---
+
+## 3. Verification & Validation
+- **Prisma Schema & DB Sync**: `npx prisma db push` succeeded.
+- **Prisma Client**: `npx prisma generate` updated client types.
+- **TypeScript Compilation**: `npx tsc --noEmit` exited with code `0` (Zero compilation errors).
+- **Migration Validation**: Verified 11,158 files and 1,344 folders successfully created in PostgreSQL matching the live MinIO storage.

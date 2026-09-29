@@ -1,0 +1,64 @@
+# Walkthrough - Infraplan HRMS Replica & Isolated Document Store
+
+We have completed the setup of the dedicated **Infraplan HRMS** replica at `D:\Live projects\infra-hrms` with 100% data and document storage isolation, dynamic branding parameterization, and verified builds.
+
+---
+
+## 1. Storage & Document Bucket Isolation
+
+All storage operations throughout the application have been updated to resolve bucket names dynamically via [drive-storage.ts](file:///d:/Live%20projects/hrms/src/lib/drive-storage.ts):
+
+| Storage Scope / Area | Sigma Bucket (Default) | Infraplan Bucket (`MINIO_BUCKET_PREFIX=infraplan`) |
+| :--- | :--- | :--- |
+| **Organization Library** | `library` | `infraplan-library` |
+| **Project Documents** | `project-documents` | `infraplan-project-documents` |
+| **Personal Drive** | `personal-drive` | `infraplan-personal-drive` |
+| **FTP & File Sharing** | `ftp-shares` | `infraplan-ftp-shares` |
+| **Task Attachments & Avatars** | `hrms` | `infraplan-hrms` |
+
+### Key Code Updates:
+- [src/app/api/attachment/[...path]/route.ts](file:///d:/Live%20projects/hrms/src/app/api/attachment/%5B...path%5D/route.ts): Replaced fallback with `getMainStorageBucket()`.
+- [src/app/api/avatar/[...path]/route.ts](file:///d:/Live%20projects/hrms/src/app/api/avatar/%5B...path%5D/route.ts): Replaced fallback with `getMainStorageBucket()`.
+- [src/actions/attachments.ts](file:///d:/Live%20projects/hrms/src/actions/attachments.ts): Uses `getMainStorageBucket()` and dynamic MinIO delete key parsing.
+- [src/app/api/file-share/presigned-url/route.ts](file:///d:/Live%20projects/hrms/src/app/api/file-share/presigned-url/route.ts): Uses `getFtpBucket()` and ensures bucket existence.
+- [src/app/api/file-share/confirm-upload/route.ts](file:///d:/Live%20projects/hrms/src/app/api/file-share/confirm-upload/route.ts): Stores `getFtpBucket()` on `FileShare` records.
+- [src/app/api/file-share/[id]/presigned-link/route.ts](file:///d:/Live%20projects/hrms/src/app/api/file-share/%5Bid%5D/presigned-link/route.ts): Uses `fileShare.bucket || getFtpBucket()`.
+- [src/app/api/file-share/[id]/download/route.ts](file:///d:/Live%20projects/hrms/src/app/api/file-share/%5Bid%5D/download/route.ts): Uses `shareRecord.bucket || getFtpBucket()`.
+- [src/app/api/cron/file-share-cleanup/route.ts](file:///d:/Live%20projects/hrms/src/app/api/cron/file-share-cleanup/route.ts): Uses `share.bucket || getFtpBucket()`.
+
+---
+
+## 2. Branding & Content Parameterization
+
+Hardcoded company and application references were replaced with centralized [appConfig](file:///d:/Live%20projects/hrms/src/lib/app-config.ts) tokens:
+- [src/app/share/[id]/page.tsx](file:///d:/Live%20projects/hrms/src/app/share/%5Bid%5D/page.tsx): Uses `Powered by ${appConfig.appName} Secure Sharing`.
+- [src/app/dashboard/policies/page.tsx](file:///d:/Live%20projects/hrms/src/app/dashboard/policies/page.tsx): Uses `${appConfig.companyFullName}` and `${appConfig.appName}` in policy headers, footers, and modal descriptions.
+- [src/components/layout/pwa-install-prompt.tsx](file:///d:/Live%20projects/hrms/src/components/layout/pwa-install-prompt.tsx): Uses `appConfig.appName` and `appConfig.appLogoUrl`.
+- [src/components/features/auth/login-form.tsx](file:///d:/Live%20projects/hrms/src/components/features/auth/login-form.tsx): Uses `appConfig.appName` for iOS installation instructions.
+- Simplified page metadata titles across org-chart, leaves, profile, documents, and roles so they automatically format as `<Page Title> | <appConfig.appName>`.
+
+---
+
+## 3. Replica Workspace Synchronization (`D:\Live projects\infra-hrms`)
+
+- Fully synchronized `src/`, `prisma/`, `public/`, `scripts/`, `docs/`, `package.json`, `tsconfig.json`, `ecosystem.config.js`, and build configs into `D:\Live projects\infra-hrms`.
+- Configured `.env` and `.env.production` in `infra-hrms` with:
+  - Database: `postgresql://.../hrms_infraplan?schema=public`
+  - App Name: `Infraplan HRMS`
+  - Company: `INFRAPLAN ENGINEERING PRIVATE LIMITED`
+  - MinIO Prefix: `MINIO_BUCKET_PREFIX=infraplan`
+  - MinIO Bucket: `MINIO_BUCKET=infraplan-hrms`
+  - Dev Email & Dummy Domains: `@infraplan.com`
+
+---
+
+## 4. Verification Results
+
+1. **TypeScript Compilation in Sigma (`D:\Live projects\hrms`)**:
+   - `npx tsc --noEmit` exited with code `0` (0 errors).
+2. **TypeScript Compilation in Infraplan (`D:\Live projects\infra-hrms`)**:
+   - `npx prisma generate` generated the Prisma client.
+   - `npx tsc --noEmit` exited with code `0` (0 errors).
+3. **Storage Bucket Resolution Test**:
+   - Sigma: `library`, `project-documents`, `personal-drive`, `ftp-shares`, `hrms`
+   - Infraplan: `infraplan-library`, `infraplan-project-documents`, `infraplan-personal-drive`, `infraplan-ftp-shares`, `infraplan-hrms`

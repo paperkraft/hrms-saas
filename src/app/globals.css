@@ -1,0 +1,444 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --radius-lg: var(--radius);
+}
+
+:root {
+  /* Ultra-Clean MarcoHR Design System */
+  --background: oklch(0.99 0.002 285);
+  --foreground: oklch(0.2 0.02 285);
+
+  /* Card & Glass Effects - Tight & Professional */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.02 285);
+
+  /* Brand Colors - Sophisticated Purple */
+  --primary: oklch(0.55 0.18 285);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --secondary: oklch(0.98 0 0);
+  --secondary-foreground: oklch(0.2 0.02 285);
+
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.5 0.02 285);
+
+  --accent: oklch(0.96 0.01 285);
+  --accent-foreground: oklch(0.5 0.1 285);
+
+  --destructive: oklch(0.6 0.18 25);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --border: oklch(0.92 0 0); /* Subtle light gray border */
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.55 0.18 285 / 0.1);
+
+  --radius: 0.375rem; /* Standard Small Roundness */
+
+  /* Sidebar Tokens - Clean White */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.35 0.02 285);
+  --sidebar-primary: var(--primary);
+  --sidebar-border: oklch(0.94 0 0);
+  --sidebar-accent: oklch(0.98 0 0);
+}
+
+.dark {
+  --background: oklch(0.14 0.02 255);
+  --foreground: oklch(0.96 0.005 255);
+
+  --card: oklch(0.17 0.025 255);
+  --card-foreground: oklch(0.96 0.005 255);
+
+  --primary: oklch(0.68 0.16 255);
+  --secondary: oklch(0.21 0.03 255);
+
+  --muted: oklch(0.21 0.02 255);
+  --muted-foreground: oklch(0.7 0.04 255);
+
+  --accent: oklch(0.24 0.04 255);
+  --border: oklch(1 0 0 / 10%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50 transition-colors duration-200;
+  }
+
+  /* Professional Animations */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in-down {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(-16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slide-out-right {
+    to {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+  }
+
+  @keyframes pulse-soft {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes bounce-soft {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+
+  body {
+    @apply bg-background text-foreground selection:bg-primary/20 selection:text-primary;
+  }
+
+  html {
+    @apply font-sans h-full scroll-smooth antialiased;
+  }
+}
+
+@layer utilities {
+  /* Text Effects */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-primary to-primary/60 font-bold;
+  }
+
+  /* Clean Card Styles — border only, no shadows */
+  .premium-card {
+    @apply bg-card border border-border rounded-sm transition-colors duration-200;
+  }
+
+  .premium-card-elevated {
+    @apply bg-card border border-border rounded-sm transition-colors duration-200;
+  }
+
+  /* Animation Utilities */
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.2) 20%,
+      rgba(255, 255, 255, 0.3) 60%,
+      transparent 100%
+    );
+    background-size: 200px 100%;
+    background-repeat: repeat;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 400ms ease-out;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 500ms ease-out;
+  }
+
+  .animate-fade-in-down {
+    animation: fade-in-down 500ms ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 300ms ease-out cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 400ms ease-out;
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-bounce-soft {
+    animation: bounce-soft 3s ease-in-out infinite;
+  }
+
+  /* Focus Ring Styles */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2;
+  }
+
+  .focus-ring-inset {
+    @apply focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary/50;
+  }
+
+  /* Hover Effects */
+  .hover-lift {
+    @apply hover:bg-muted/5 transition-colors duration-200;
+  }
+
+  .hover-glow {
+    @apply hover:bg-primary/5 transition-colors duration-200;
+  }
+
+  /* Loading States */
+  .loading-pulse {
+    @apply animate-pulse;
+  }
+
+  .loading-spinner {
+    @apply animate-spin;
+  }
+
+  /* Transitions */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .transition-bounce {
+    @apply transition-all duration-300 ease-out;
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Badges & Pills */
+  .badge-sm {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-medium rounded-full;
+  }
+
+  .badge-md {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-full;
+  }
+
+  /* Disabled State */
+  .disabled-opacity {
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Professional Spacing System */
+  .space-section {
+    @apply space-y-8;
+  }
+
+  .space-card {
+    @apply space-y-6;
+  }
+
+  .space-content {
+    @apply space-y-4;
+  }
+
+  /* Professional Typography */
+  .heading-xl {
+    @apply text-4xl font-bold tracking-tight text-foreground;
+  }
+
+  .heading-lg {
+    @apply text-3xl font-bold tracking-tight text-foreground;
+  }
+
+  .heading-md {
+    @apply text-2xl font-bold tracking-tight text-foreground;
+  }
+
+  .heading-sm {
+    @apply text-xl font-semibold tracking-tight text-foreground;
+  }
+
+  .text-description {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .text-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+
+  .text-value {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  /* Professional Layouts */
+  .page-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .page-grid {
+    @apply grid grid-cols-1 gap-8;
+  }
+
+  .content-grid {
+    @apply grid grid-cols-1 lg:grid-cols-3 gap-6;
+  }
+
+  .main-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6;
+  }
+
+  .two-col {
+    @apply grid grid-cols-1 lg:grid-cols-2 gap-6;
+  }
+
+  .three-col {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+
+  /* Professional Status Colors */
+  .status-active {
+    @apply inline-flex items-center gap-2 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30;
+  }
+
+  .status-pending {
+    @apply inline-flex items-center gap-2 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30;
+  }
+
+  .status-warning {
+    @apply inline-flex items-center gap-2 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30;
+  }
+
+  .status-completed {
+    @apply inline-flex items-center gap-2 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30;
+  }
+
+  .status-info {
+    @apply inline-flex items-center gap-2 text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/30;
+  }
+
+  /* Cards & Sections */
+  .card-header {
+    @apply border-b border-border/40 bg-muted/2.5;
+  }
+
+  .card-section {
+    @apply p-6 border-b border-border/40 last:border-b-0;
+  }
+
+  .card-divider {
+    @apply h-px bg-border/40;
+  }
+
+  /* Table Enhancements */
+  .table-header {
+    @apply bg-muted/5 border-b border-border/40 text-xs font-semibold uppercase tracking-wider;
+  }
+
+  .table-row-hover {
+    @apply hover:bg-muted/5 transition-colors duration-150;
+  }
+
+  .table-cell {
+    @apply px-6 py-4 text-sm;
+  }
+
+  .table-cell-compact {
+    @apply px-4 py-2 text-sm;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* TipTap Placeholder */
+  .is-editor-empty:first-child::before {
+    color: hsl(var(--muted-foreground) / 0.5);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+}

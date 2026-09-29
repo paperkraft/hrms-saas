@@ -1,0 +1,40 @@
+# Walkthrough: Resigned User Data Retention & Rehire (Rejoining Date) Workflow
+
+We have implemented a complete data retention, soft-deactivation, and rehire/rejoining management system in the HRMS.
+
+---
+
+## 1. Zero Data Loss & Soft-Deactivation
+- **No records are hard-deleted**: User rows are never deleted from PostgreSQL.
+- **Projects, Tasks & Documents**: All tasks, project assignments, comments, activity logs, Library Documents, and Project Documents associated with a resigned employee remain active, intact, and fully accessible to Admins and project members.
+- **Login Block**: Resigned/inactive employees are blocked from logging in with a clear message: `"Your account has been deactivated. Please contact an administrator."`
+
+---
+
+## 2. Rejoining / Rehire Date Workflow
+In line with industry standards (Zoho People, BambooHR, Keka):
+- **Original Joining Date (`joiningDate`)**: Preserved permanently as the employee's initial start date.
+- **Rejoining Date (`rejoiningDate`)**: Logged when a resigned employee rejoins the organization.
+- **Previous Exit Date (`resignationDate`)**: Maintained as historical record of departure.
+- **Leave Allocation on Rehire**: When reactivated, current monthly leave balance is automatically ensured/initialized starting from their rejoining tenure.
+
+---
+
+## 3. UI Features Added
+1. **[ResignationDialog](file:///d:/SV/Live%20projects/hrms/src/components/features/admin/resignation-dialog.tsx)**:
+   - **For Active Employees**: Mark as Resigned / Inactive / Terminated with optional 1-click task reassignment.
+   - **For Resigned/Inactive Employees**: Rehire / Reactivate with an explicit **Rejoining Date** selector (defaults to today).
+2. **[UserManagementTable](file:///d:/SV/Live%20projects/hrms/src/components/features/admin/user-management-table.tsx)**:
+   - Filter tabs: **Active**, **Resigned**, **Inactive**, **All** with count badges.
+   - Status badges: Active (Green), Resigned (Amber), Inactive (Slate), Terminated (Red).
+   - Date column displays Original Joining Date, Rejoined Date, and Departure Date.
+3. **[EditUserDialog](file:///d:/SV/Live%20projects/hrms/src/components/features/admin/edit-user-dialog.tsx)**:
+   - Direct editing of `Status`, `Original Joining Date`, `Rejoining Date`, and `Resignation Date`.
+4. **[EmployeeDetailsDialog](file:///d:/SV/Live%20projects/hrms/src/components/features/admin/employee-details-dialog.tsx)**:
+   - Displays Rejoined/Rehire date banner and previous departure information.
+
+---
+
+## 4. Verification Results
+- **Prisma Schema**: Synchronized via `prisma db push`.
+- **TypeScript**: `npx tsc --noEmit` passed with 0 errors.
