@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.tenantId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -42,12 +42,13 @@ export async function POST(req: NextRequest) {
     // Save metadata to Prisma
     const shareRecord = await prisma.fileShare.create({
       data: {
+        tenantId: session.user.tenantId,
         uploaderId: session.user.id,
         fileName: filename,
         storageKey: objectName,
         bucket: getFtpBucket(),
         mimeType: type || "application/octet-stream",
-        size: size || 0,
+        size: Number(size) || 0,
         expiresAt: expiresAt,
         sharedWith: {
           connect: (sharedWithIds || []).map((id: string) => ({ id })),
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    let allUserIdsToNotify = new Set(sharedWithIds || []);
+    let allUserIdsToNotify = new Set<string>(sharedWithIds || []);
 
     if (sharedWithDeptIds && sharedWithDeptIds.length > 0) {
       const deptUsers = await prisma.user.findMany({
@@ -76,11 +77,13 @@ export async function POST(req: NextRequest) {
         ? `${session.user.name || "A colleague"} shared ${bCount} new files with you.`
         : `${session.user.name || "A colleague"} shared a file with you: ${filename}`;
 
+      const tenantId = session.user.tenantId as string;
       await prisma.notification.createMany({
         data: notifyIds.map((id) => ({
+          tenantId,
           userId: id as string,
           title: bCount > 1 ? "New Files Shared" : "New File Shared",
-          content,
+          message: content,
           type: "INFO",
           link: "/dashboard/file-share",
         })),

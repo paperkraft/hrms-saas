@@ -250,7 +250,7 @@ export async function processLeaveRequestStatus(requestId: string, status: "APPR
 
     for (const part of monthParts) {
       const balance = await tx.leaveBalance.findUnique({
-        where: { userId_month_year: { userId: txRequest.userId, month: part.month, year: part.year } }
+        where: { tenantId_userId_month_year: { tenantId: txRequest.tenantId, userId: txRequest.userId, month: part.month, year: part.year } }
       });
       if (!balance) throw new Error(`BALANCE_NOT_FOUND_FOR_${part.month}_${part.year}`);
 

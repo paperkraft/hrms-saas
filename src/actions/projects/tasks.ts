@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { authorizeProjectManager, getLedDepartmentIds, getSession } from "./core"
 import { logActivity } from "@/lib/activity-logger"
 import { isExternalUser } from "@/lib/permissions"
+import { createNotification, createManyNotifications } from "@/actions/notification"
 
 export async function getProjectTasks(projectId: string) {
   try {
@@ -191,6 +192,7 @@ export async function createTask(data: any) {
 
       await prisma.workloadSnapshot.create({
         data: {
+          tenantId: session.user.tenantId!,
           userId: assignedToId,
           activeTasks: activeCount,
           committedTasks: await prisma.task.count({ where: { assignedToId, lifecycleStatus: "COMMITTED" } }),
@@ -242,12 +244,13 @@ export async function createTask(data: any) {
 
       if (!isAllowedSharedProject) {
         let extProject = await prisma.project.findFirst({
-          where: { name: { equals: "External", mode: "insensitive" } },
+          where: { tenantId: session.user.tenantId, name: { equals: "External", mode: "insensitive" } },
           select: { id: true }
         })
         if (!extProject) {
           extProject = await prisma.project.create({
             data: {
+              tenantId: session.user.tenantId!,
               name: "External",
               description: "Dedicated project workspace for external collaborator deliverables and tasks",
               status: "ACTIVE"
@@ -300,27 +303,23 @@ export async function createTask(data: any) {
 
     // ── Notify employee when proposed ─────────────────────────────────────────
     if (!isSelfAssigned && assignedToId) {
-      await prisma.notification.create({
-        data: {
-          userId: assignedToId,
-          title: "New Task Assigned — Awaiting Your Response",
-          content: `${session.user.name} assigned you "${task.name}" — please review and accept, raise a concern, or request reassignment.`,
-          type: "INFO",
-          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-        }
+      await createNotification({
+        userId: assignedToId,
+        title: "New Task Assigned — Awaiting Your Response",
+        message: `${session.user.name} assigned you "${task.name}" — please review and accept, raise a concern, or request reassignment.`,
+        type: "INFO",
+        link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
       })
     }
 
     // Notify reviewer if explicitly set
     if (task.reviewerId && task.reviewerId !== session.user.id && task.reviewerId !== assignedToId) {
-      await prisma.notification.create({
-        data: {
-          userId: task.reviewerId,
-          title: "Assigned as Task Reviewer",
-          content: `${session.user.name} assigned you as the Reviewer for task "${task.name}".`,
-          type: "INFO",
-          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-        }
+      await createNotification({
+        userId: task.reviewerId,
+        title: "Assigned as Task Reviewer",
+        message: `${session.user.name} assigned you as the Reviewer for task "${task.name}".`,
+        type: "INFO",
+        link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
       })
     }
 
@@ -489,7 +488,7 @@ export async function updateTask(id: string, data: any) {
           if (tl?.teamLeaderId) notifyUserIds.add(tl.teamLeaderId);
         }
 
-        const admins = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "SYSTEM_ADMIN"] } }, select: { id: true } });
+        const admins = await prisma.user.findMany({ where: { tenantId: session.user.tenantId, role: "ADMIN" }, select: { id: true } });
         admins.forEach(admin => notifyUserIds.add(admin.id));
 
         notifyUserIds.delete(session.user.id);
@@ -497,13 +496,13 @@ export async function updateTask(id: string, data: any) {
         const notifications = Array.from(notifyUserIds).map(userId => ({
           userId,
           title: "Task Ready for Review",
-          content: `Task "${oldTask.name}" has been moved to In Review and requires your approval.`,
+          message: `Task "${oldTask.name}" has been moved to In Review and requires your approval.`,
           type: "INFO",
           link: `/dashboard/projects/${oldTask.projectId}`
         }));
 
         if (notifications.length > 0) {
-          await prisma.notification.createMany({ data: notifications });
+          await createManyNotifications(notifications);
         }
       }
     } else {
@@ -783,8 +782,7 @@ export async function approveTask(id: string, status: "APPROVED" | "REJECTED", r
 
     const isParentTlAdmin = (parentDepartmentLeaderId && parentDepartmentLeaderId === session.user.id && isActuallyAdmin) ||
       (parentDept?.id && ledDepartmentIds.includes(parentDept.id) && isActuallyAdmin) ||
-      leaderUserRole === "ADMIN" ||
-      leaderUserRole === "SYSTEM_ADMIN"
+      leaderUserRole === "ADMIN"
 
     const isAssigneeSubTL = !!(subDepartmentLeaderId && task.assignedToId === subDepartmentLeaderId)
     const isAssigneeTL = !!(parentDepartmentLeaderId && task.assignedToId === parentDepartmentLeaderId)
@@ -843,14 +841,12 @@ export async function approveTask(id: string, status: "APPROVED" | "REJECTED", r
 
       // Notify Assignee
       if (task.assignedToId && task.assignedToId !== session.user.id) {
-        await prisma.notification.create({
-          data: {
-            userId: task.assignedToId,
-            title: isReopening ? "Task Re-opened" : "Task Submission Rejected",
-            content: `Task "${task.name}" was ${isReopening ? "re-opened" : "rejected"} by ${session.user.name}: "${reason}"`,
-            type: "WARNING",
-            link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-          }
+        await createNotification({
+          userId: task.assignedToId,
+          title: isReopening ? "Task Re-opened" : "Task Submission Rejected",
+          message: `Task "${task.name}" was ${isReopening ? "re-opened" : "rejected"} by ${session.user.name}: "${reason}"`,
+          type: "WARNING",
+          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
         }).catch(() => {})
       }
 
@@ -931,29 +927,27 @@ export async function approveTask(id: string, status: "APPROVED" | "REJECTED", r
         nextStepMessage = "Waiting for Parent Team Leader approval"
         // Notify Parent TL
         if (parentDepartmentLeaderId && parentDepartmentLeaderId !== session.user.id) {
-          await prisma.notification.create({
-            data: {
-              userId: parentDepartmentLeaderId,
-              title: "Task Awaiting Your Approval",
-              content: `Task "${task.name}" has been approved by Sub-TL and now requires your approval.`,
-              type: "INFO",
-              link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-            }
+          await createNotification({
+            userId: parentDepartmentLeaderId,
+            title: "Task Awaiting Your Approval",
+            message: `Task "${task.name}" has been approved by Sub-TL and now requires your approval.`,
+            type: "INFO",
+            link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
           }).catch(() => {})
         }
       } else if (!willBeAdminApproved) {
         nextStepMessage = "Waiting for Admin final approval"
         // Notify Admins
-        const admins = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "SYSTEM_ADMIN"] } }, select: { id: true } })
+        const admins = await prisma.user.findMany({ where: { tenantId: session.user.tenantId, role: "ADMIN" }, select: { id: true } })
         const adminNotifications = admins.filter(a => a.id !== session.user.id).map(a => ({
           userId: a.id,
           title: "Task Awaiting Admin Approval",
-          content: `Task "${task.name}" has been approved by Team Leader and requires final approval.`,
+          message: `Task "${task.name}" has been approved by Team Leader and requires final approval.`,
           type: "INFO",
           link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
         }))
         if (adminNotifications.length > 0) {
-          await prisma.notification.createMany({ data: adminNotifications }).catch(() => {})
+          await createManyNotifications(adminNotifications).catch(() => {})
         }
       }
       if (nextStepMessage) logs.push(nextStepMessage)
@@ -983,14 +977,12 @@ export async function approveTask(id: string, status: "APPROVED" | "REJECTED", r
 
     // If fully completed, notify assignee
     if (updateData.status === "COMPLETED" && task.assignedToId && task.assignedToId !== session.user.id) {
-      await prisma.notification.create({
-        data: {
-          userId: task.assignedToId,
-          title: "Task Approved & Completed! 🎉",
-          content: `Your task "${task.name}" has received all required approvals and is now marked Completed.`,
-          type: "SUCCESS",
-          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-        }
+      await createNotification({
+        userId: task.assignedToId,
+        title: "Task Approved & Completed! 🎉",
+        message: `Your task "${task.name}" has received all required approvals and is now marked Completed.`,
+        type: "SUCCESS",
+        link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
       }).catch(() => {})
     }
 

@@ -16,7 +16,6 @@ import {
 import { DriveItemWithDetails, getDriveActivityLogs, getDriveDownloadUrl } from "@/actions/drive";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExcelViewer } from "@/components/features/library/excel-viewer";
 import { getFileTypeIcon } from "./drive-file-card";
 import { cn } from "@/lib/utils";
 
@@ -318,9 +317,11 @@ export function DriveDetailsPanel({
                   title={selectedItem.name}
                 />
               ) : isExcel ? (
-                <div className="w-full h-full rounded-lg border bg-white overflow-hidden shadow-2xs">
-                  <ExcelViewer url={previewUrl} />
-                </div>
+                <iframe
+                  src={`https://docs.google.com/gview?url=${encodeURIComponent(previewUrl)}&embedded=true`}
+                  className="w-full h-full rounded-lg border bg-white shadow-2xs"
+                  title={selectedItem.name}
+                />
               ) : isImage ? (
                 <div className="w-full h-full flex items-center justify-center p-2 overflow-auto bg-black/5 rounded-xl border">
                   <img

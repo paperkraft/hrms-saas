@@ -14,11 +14,12 @@ async function authorizeUserManagement() {
   if (!session?.user || !hasMenuAccess(session.user, "/dashboard/admin/users", "/dashboard/accountant/users")) {
     throw new Error("Unauthorized. Required appropriate permissions.")
   }
+  return session
 }
 
 export async function createUser(data: any) {
   try {
-    await authorizeUserManagement()
+    const session = await authorizeUserManagement()
     const hashedPassword = await bcrypt.hash(data.password, 10)
 
     // Multi-role resolution: collect all assigned role definitions
@@ -75,8 +76,12 @@ export async function createUser(data: any) {
       }
     }
 
+    const tenantId = data.tenantId || session.user.tenantId;
+    if (!tenantId) return { success: false, error: "Tenant ID is required to create a user." };
+
     const user = await prisma.user.create({
       data: {
+        tenantId,
         name: data.name,
         email: data.email,
         password: hashedPassword,
@@ -124,7 +129,7 @@ export async function createUser(data: any) {
     }
 
     // Initialize balance for current month (skip for external users or non-active)
-    if (user.role !== "EXTERNAL_USER" && user.status === "ACTIVE") {
+    if (!user.isExternal && user.status === "ACTIVE") {
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
       await ensureBalance(user.id, currentMonth, currentYear);
@@ -383,10 +388,10 @@ export async function permanentlyDeleteUser(id: string) {
       return { success: false, error: "User not found." }
     }
 
-    // 2. Prevent non-system-admins from deleting SYSTEM_ADMIN
-    if (targetUser.role === "SYSTEM_ADMIN" || targetUser.roleDefinition?.code === "SYSTEM_ADMIN") {
-      if (session?.user.role !== "SYSTEM_ADMIN") {
-        return { success: false, error: "Only a System Administrator can delete a System Administrator account." }
+    // 2. Prevent non-system-admins from deleting SYSTEM_ADMIN role def
+    if (targetUser.roleDefinition?.code === "SYSTEM_ADMIN") {
+      if (session?.user.role !== "ADMIN") {
+        return { success: false, error: "Only an Administrator can delete a System Administrator account." }
       }
     }
 
@@ -459,8 +464,8 @@ export async function permanentlyDeleteUser(id: string) {
       await tx.announcementRead.deleteMany({ where: { userId: id } });
       if (adminFallbackId) {
         await tx.announcement.updateMany({
-          where: { authorId: id },
-          data: { authorId: adminFallbackId }
+          where: { createdById: id },
+          data: { createdById: adminFallbackId }
         });
       }
       await tx.notification.deleteMany({ where: { userId: id } });
@@ -529,7 +534,7 @@ export async function setUserEmploymentStatus(params: {
     })
 
     // If reactivated, ensure leave balance is available for current month
-    if (params.status === "ACTIVE" && updatedUser.role !== "EXTERNAL_USER") {
+    if (params.status === "ACTIVE" && !updatedUser.isExternal) {
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
       await ensureBalance(updatedUser.id, currentMonth, currentYear);
@@ -649,11 +654,13 @@ export async function getUserProfile() {
 
 export async function getAdminUsersData() {
   try {
-    await authorizeUserManagement()
+    const session = await authorizeUserManagement()
+    const tenantId = session?.user?.tenantId;
+
     const [users, validManagers, departments, locations, roles] = await Promise.all([
       prisma.user.findMany({
         where: {
-          role: { not: 'SYSTEM_ADMIN' },
+          ...(tenantId ? { tenantId } : {}),
           NOT: {
             roleDefinition: {
               code: 'SYSTEM_ADMIN'
@@ -680,7 +687,7 @@ export async function getAdminUsersData() {
       }),
       prisma.user.findMany({
         where: {
-          role: { not: 'SYSTEM_ADMIN' },
+          ...(tenantId ? { tenantId } : {}),
           status: 'ACTIVE',
           NOT: {
             roleDefinition: {
@@ -692,15 +699,18 @@ export async function getAdminUsersData() {
         orderBy: { name: 'asc' }
       }),
       prisma.department.findMany({
+        where: tenantId ? { tenantId } : {},
         select: { id: true, name: true, teamLeaderId: true },
         orderBy: { name: 'asc' }
       }),
       prisma.location.findMany({
+        where: tenantId ? { tenantId } : {},
         select: { id: true, name: true, isRemote: true },
         orderBy: { name: 'asc' }
       }),
       prisma.roleDefinition.findMany({
         where: {
+          ...(tenantId ? { tenantId } : {}),
           code: { not: 'SYSTEM_ADMIN' }
         },
         orderBy: [
@@ -727,9 +737,12 @@ export async function getAdminUsersData() {
 
 export async function getEmployeesForDropdown() {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const users = await prisma.user.findMany({
       where: {
-        role: { not: 'SYSTEM_ADMIN' },
+        ...(tenantId ? { tenantId } : {}),
         status: 'ACTIVE',
         NOT: {
           roleDefinition: {

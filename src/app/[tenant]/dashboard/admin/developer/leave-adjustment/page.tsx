@@ -15,14 +15,16 @@ export const metadata = {
 export default async function LeaveAdjustmentPage() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user || session.user.role !== "SYSTEM_ADMIN") {
+  if (!session?.user || session.user.role !== "ADMIN") {
     redirect("/dashboard");
   }
 
+  const tenantId = session.user.tenantId;
+
   const users = await prisma.user.findMany({
     where: {
+      ...(tenantId ? { tenantId } : {}),
       status: "ACTIVE",
-      role: { not: "SYSTEM_ADMIN" },
       NOT: {
         roleDefinition: {
           code: "SYSTEM_ADMIN"
@@ -43,7 +45,7 @@ export default async function LeaveAdjustmentPage() {
 
   return (
     <PageContainer maxWidth="full" className="py-6 animate-fade-in">
-      <LeaveAdjustmentClient users={users} />
+      <LeaveAdjustmentClient users={users as any} />
     </PageContainer>
   );
 }

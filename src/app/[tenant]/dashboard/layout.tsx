@@ -11,11 +11,18 @@ import { headers } from "next/headers";
 
 import { isPathPermittedForUser, isExternalUser } from "@/lib/permissions";
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ tenant: string }>;
+}) {
+  const { tenant: tenantSlug } = await params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
-    redirect("/login");
+    redirect(`/${tenantSlug}/login`);
   }
 
   // Fetch live roleDefinition & allowedMenus directly from DB on every server layout render
@@ -109,6 +116,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         isTeamLeader={session.user.isTeamLeader ?? false} 
         userAllowedMenus={userAllowedMenus}
         isExternal={isExternal}
+        tenantSlug={session.user.tenantSlug || undefined}
       />
       <SidebarInset>
         <div className="flex min-h-screen bg-[#fcfcfc] dark:bg-background text-foreground selection:bg-primary/20">

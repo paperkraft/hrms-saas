@@ -55,7 +55,7 @@ export async function getProjectShares(projectId: string) {
             }
           }
         },
-        sharedBy: {
+        grantor: {
           select: {
             id: true,
             name: true,
@@ -154,10 +154,10 @@ export async function shareProjectWithUsers(projectId: string, userIds: string[]
         create: {
           projectId,
           userId,
-          sharedById: session.user.id
+          grantedBy: session.user.id
         },
         update: {
-          sharedById: session.user.id
+          grantedBy: session.user.id
         },
         include: {
           user: { select: { id: true, name: true, email: true } }

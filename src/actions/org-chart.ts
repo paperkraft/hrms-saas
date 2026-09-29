@@ -88,7 +88,6 @@ export async function getOrgData(): Promise<OrgData> {
   const [users, departments] = await Promise.all([
     prisma.user.findMany({
       where: {
-        role: { not: 'SYSTEM_ADMIN' },
         status: { notIn: ['RESIGNED', 'TERMINATED'] },
         NOT: [
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
@@ -181,7 +180,6 @@ export async function getOrgData(): Promise<OrgData> {
         },
         members: {
           where: {
-            role: { not: 'SYSTEM_ADMIN' },
             status: { notIn: ['RESIGNED', 'TERMINATED'] },
             NOT: [
               { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
@@ -248,7 +246,6 @@ export async function getOrgData(): Promise<OrgData> {
         userDepartments: {
           where: {
             user: {
-              role: { not: 'SYSTEM_ADMIN' },
               status: { notIn: ['RESIGNED', 'TERMINATED'] },
               NOT: [
                 { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
@@ -329,14 +326,14 @@ export async function getOrgData(): Promise<OrgData> {
   ])
 
   // Map roleName from roleDefinition if available
-  const mappedUsers: OrgUser[] = users.map(u => ({
+  const mappedUsers: OrgUser[] = (users as any[]).map(u => ({
     ...u,
     status: u.status,
     role: u.roleDefinition?.code || u.role,
     roleName: u.roleDefinition?.name || null
   })) as unknown as OrgUser[]
 
-  const mappedDepartments: OrgDepartment[] = departments.map(d => {
+  const mappedDepartments: OrgDepartment[] = (departments as any[]).map(d => {
     const memberMap = new Map<string, OrgUser>()
 
     // 1. Direct members relation (filtered to active/inactive only)

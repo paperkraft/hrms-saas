@@ -44,7 +44,7 @@ export async function processReminders() {
   const candidates = await prisma.user.findMany({
     where: getPayrollEligibleUserWhere({
       isExternal: false,
-      role: { notIn: ["ADMIN", "SYSTEM_ADMIN", "EXTERNAL_USER"] },
+      role: { not: "ADMIN" },
       OR: orConditions
     }),
     include: {
@@ -66,8 +66,6 @@ export async function processReminders() {
   for (const user of candidates) {
     if (
       user.isExternal ||
-      user.role === "EXTERNAL_USER" ||
-      (user.role as string) === "EXTERNAL" ||
       user.roleDefinition?.isExternal ||
       user.roleDefinition?.code === "EXTERNAL_USER"
     ) {

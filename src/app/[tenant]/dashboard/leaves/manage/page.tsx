@@ -73,9 +73,7 @@ export default async function ManageLeavesPage({
   const endOfMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
 
   const nonDevUserFilter = {
-    role: { not: "SYSTEM_ADMIN" as const },
     NOT: [
-      { role: "SYSTEM_ADMIN" as const },
       { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
       { roleDefinition: { code: "SYSTEM_ADMIN" } }
     ]

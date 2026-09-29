@@ -100,7 +100,7 @@ export async function calculateAttendanceStatusFlags(
   // 2. Calculate isEarlyLogoff
   let isEarlyLogoff = false;
   if (punchOut && !isApprovedFullLeave) {
-    const earlyLogoffEnabled = config?.earlyLogoffEnabled ?? false;
+    const earlyLogoffEnabled = (config as any)?.earlyLogoffEnabled ?? false;
     const [eH, eM] = endTime.split(":").map(Number);
     const shiftEnd = new Date(year, month, day, eH, eM, 0, 0);
 
@@ -128,8 +128,8 @@ export async function calculateAttendanceStatusFlags(
 
   // 3. Calculate isLateSpecialCase (late waiver by staying late)
   let isLateSpecialCase = false;
-  const specialCaseEnabled = config?.specialCaseEnabled ?? true;
-  const extraMinutes = config?.specialCaseExtraMinutes ?? 0;
+  const specialCaseEnabled = (config as any)?.specialCaseEnabled ?? true;
+  const extraMinutes = (config as any)?.specialCaseExtraMinutes ?? 0;
 
   if (specialCaseEnabled && isLate && !isHalfDay && punchOut && !isOutsideOffice) {
     const [shiftSH, shiftSM] = startTime.split(":").map(s => parseInt(s, 10));
@@ -170,7 +170,7 @@ export async function calculateAttendanceStatusFlags(
         }
       }
 
-      const maxLateMinutes = config?.specialCaseMaxLateMinutes ?? 10;
+      const maxLateMinutes = (config as any)?.specialCaseMaxLateMinutes ?? 10;
       const [esH, esM] = effectiveStartTime.split(":").map(Number);
       const maxLateThreshold = new Date(year, month, day, esH, esM + graceMinutes + maxLateMinutes, 0, 0);
 

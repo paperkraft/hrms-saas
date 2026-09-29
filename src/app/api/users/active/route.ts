@@ -11,9 +11,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const tenantId = session.user.tenantId;
+
     const users = await prisma.user.findMany({
       where: {
-        role: { not: "SYSTEM_ADMIN" },
+        ...(tenantId ? { tenantId } : {}),
         status: "ACTIVE",
         NOT: {
           roleDefinition: {

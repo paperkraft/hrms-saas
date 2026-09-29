@@ -73,11 +73,8 @@ export function getPayrollEligibleUserWhere(
 
   return {
     ...statusCondition,
-    role: { not: "SYSTEM_ADMIN" },
     isExternal: false,
     NOT: [
-      { role: "SYSTEM_ADMIN" },
-      { role: "EXTERNAL_USER" },
       { isExternal: true },
       { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
       { roleDefinition: { code: "SYSTEM_ADMIN" } },
@@ -95,7 +92,7 @@ export function getPayrollEligibleUserWhere(
       },
       {
         roleDefinitionId: null,
-        role: { notIn: ["ADMIN", "SYSTEM_ADMIN", "EXTERNAL_USER"] },
+        role: { not: "ADMIN" },
         isExternal: false,
       },
     ],

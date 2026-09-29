@@ -4,7 +4,6 @@ import prisma from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-
 import { hasMenuAccess } from "@/lib/permissions"
 
 async function authorizeAdmin() {
@@ -12,11 +11,16 @@ async function authorizeAdmin() {
   if (!session?.user || !hasMenuAccess(session.user, "/dashboard/projects/task-master", "/dashboard/projects")) {
     throw new Error("Unauthorized. Task Master management permissions required.")
   }
+  return session;
 }
 
 export async function getTaskMasters() {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const taskMasters = await prisma.taskMaster.findMany({
+      where: tenantId ? { tenantId } : {},
       include: {
         department: {
           select: { id: true, name: true }
@@ -30,14 +34,18 @@ export async function getTaskMasters() {
   }
 }
 
-export async function createTaskMaster(data: { name: string; activity?: string; defaultDurationDays?: number; departmentId: string }) {
+export async function createTaskMaster(data: { name: string; activity?: string; defaultDurationDays?: number; defaultDuration?: number; departmentId: string }) {
   try {
-    await authorizeAdmin()
+    const session = await authorizeAdmin()
+    const tenantId = session.user.tenantId;
+    if (!tenantId) throw new Error("No tenant configured");
+
     const taskMaster = await prisma.taskMaster.create({
       data: {
+        tenantId,
         name: data.name,
         activity: data.activity,
-        defaultDurationDays: data.defaultDurationDays,
+        defaultDuration: data.defaultDurationDays || data.defaultDuration,
         departmentId: data.departmentId
       }
     })
@@ -48,7 +56,7 @@ export async function createTaskMaster(data: { name: string; activity?: string; 
   }
 }
 
-export async function updateTaskMaster(id: string, data: { name: string; activity?: string; defaultDurationDays?: number; departmentId: string }) {
+export async function updateTaskMaster(id: string, data: { name: string; activity?: string; defaultDurationDays?: number; defaultDuration?: number; departmentId: string }) {
   try {
     await authorizeAdmin()
     const taskMaster = await prisma.taskMaster.update({
@@ -56,7 +64,7 @@ export async function updateTaskMaster(id: string, data: { name: string; activit
       data: {
         name: data.name,
         activity: data.activity,
-        defaultDurationDays: data.defaultDurationDays,
+        defaultDuration: data.defaultDurationDays || data.defaultDuration,
         departmentId: data.departmentId
       }
     })
@@ -80,16 +88,18 @@ export async function deleteTaskMaster(id: string) {
   }
 }
 
-export async function bulkInsertTaskMasters(data: Array<{ name: string; activity?: string; defaultDurationDays?: number | null; departmentId: string }>) {
+export async function bulkInsertTaskMasters(data: Array<{ name: string; activity?: string; defaultDurationDays?: number | null; defaultDuration?: number | null; departmentId: string }>) {
   try {
-    await authorizeAdmin()
+    const session = await authorizeAdmin()
+    const tenantId = session.user.tenantId;
+    if (!tenantId) throw new Error("No tenant configured");
     
-    // CreateMany is supported by PostgreSQL and is very fast
     const result = await prisma.taskMaster.createMany({
       data: data.map(item => ({
+        tenantId,
         name: item.name,
         activity: item.activity || null,
-        defaultDurationDays: item.defaultDurationDays || null,
+        defaultDuration: item.defaultDurationDays || item.defaultDuration || null,
         departmentId: item.departmentId
       }))
     })
@@ -100,4 +110,3 @@ export async function bulkInsertTaskMasters(data: Array<{ name: string; activity
     return { success: false, error: error.message }
   }
 }
-

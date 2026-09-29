@@ -15,13 +15,15 @@ export const metadata = {
 export default async function AttendanceBackfillPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user || session.user.role !== "SYSTEM_ADMIN") {
+  if (!session?.user || session.user.role !== "ADMIN") {
     redirect("/dashboard");
   }
 
+  const tenantId = session.user.tenantId;
+
   const users = await prisma.user.findMany({
     where: {
-      role: { not: "SYSTEM_ADMIN" },
+      ...(tenantId ? { tenantId } : {}),
       status: "ACTIVE",
       NOT: {
         roleDefinition: {

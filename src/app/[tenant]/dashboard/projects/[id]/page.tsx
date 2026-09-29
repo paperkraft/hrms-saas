@@ -143,7 +143,7 @@ export default async function ProjectDetailPage({
   const ledDepartmentIds = Array.from(ledDepartmentIdsSet)
 
   const rawUsers = await prisma.user.findMany({
-    where: { role: { not: "SYSTEM_ADMIN" }, status: "ACTIVE" },
+    where: { status: "ACTIVE" },
     select: { id: true, name: true, email: true, departmentId: true, role: true, ledDepartments: { select: { id: true } } }
   })
 

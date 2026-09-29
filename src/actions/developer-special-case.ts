@@ -15,7 +15,6 @@ export async function getSpecialCaseUsers() {
 
     const users = await prisma.user.findMany({
       where: {
-        role: { not: "SYSTEM_ADMIN" },
         status: "ACTIVE",
         NOT: {
           roleDefinition: {

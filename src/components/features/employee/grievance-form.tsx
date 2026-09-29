@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { format, subDays } from "date-fns";
-import { GrievanceType } from "@prisma/client";
 import { toast } from "sonner";
-import { submitGrievance } from "@/actions/attendance/grievance";
+import { submitGrievance, GrievanceType } from "@/actions/attendance/grievance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -98,7 +97,9 @@ export function GrievanceForm({ onComplete }: { onComplete?: () => void }) {
 
       <div className={grievanceType === "FORGOT_BOTH" ? "grid grid-cols-2 gap-4" : "space-y-1.5"}>
         <div className="space-y-1.5">
-          <Label className={labelClass}>{grievanceType === "FORGOT_BOTH" ? "Arrival Time" : grievanceType === "FORGOT_PUNCH_OUT" ? "Departure Time" : "Arrival Time"}</Label>
+          <Label className={labelClass}>
+            {grievanceType === "FORGOT_PUNCH_OUT" ? "Actual Punch Out Time" : "Actual Punch In Time"}
+          </Label>
           <Input 
             type="time" 
             value={requestedTime} 
@@ -106,39 +107,39 @@ export function GrievanceForm({ onComplete }: { onComplete?: () => void }) {
             className={inputClass}
             required 
           />
-          <p className="text-[9px] text-muted-foreground font-medium">The exact time you {grievanceType === "FORGOT_PUNCH_OUT" ? "departed" : "arrived"}</p>
         </div>
-        
         {grievanceType === "FORGOT_BOTH" && (
           <div className="space-y-1.5">
-            <Label className={labelClass}>Departure Time</Label>
+            <Label className={labelClass}>Actual Punch Out Time</Label>
             <Input 
               type="time" 
               value={requestedOutTime} 
               onChange={(e) => setRequestedOutTime(e.target.value)} 
               className={inputClass}
-              required={grievanceType === "FORGOT_BOTH"} 
+              required 
             />
-            <p className="text-[9px] text-muted-foreground font-medium">The exact time you departed</p>
           </div>
         )}
       </div>
 
-      <div className="space-y-1.5 pt-2 border-t border-border/60">
-        <Label className={labelClass}>Reason for Missed Punch</Label>
+      <div className="space-y-1.5">
+        <Label className={labelClass}>Reason & Context</Label>
         <Textarea 
-          placeholder="Why was the punch missed or delayed? Explain briefly..." 
+          placeholder="Briefly explain why punch was missed (e.g. biometric device error, urgent client site visit directly from home)..." 
           value={reason} 
           onChange={(e) => setReason(e.target.value)} 
-          className="min-h-[90px] bg-muted/20 border-border/80 text-xs rounded-md resize-none focus:ring-primary/20"
+          className="min-h-[90px] bg-muted/20 border-border/80 rounded-md text-xs font-medium focus:ring-primary/20 focus:border-primary resize-none"
           required 
-          rows={3}
         />
       </div>
 
-      <Button type="submit" className="w-full h-9 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer" disabled={isSubmitting}>
-        {isSubmitting ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-        Submit Adjustment Request
+      <Button 
+        type="submit" 
+        disabled={isSubmitting} 
+        className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-md shadow-2xs cursor-pointer"
+      >
+        {isSubmitting ? <Loader2 className="size-3.5 animate-spin mr-2" /> : null}
+        Submit Missed Attendance Grievance
       </Button>
     </form>
   );

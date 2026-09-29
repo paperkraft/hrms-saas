@@ -16,17 +16,10 @@ const DEFAULT_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;     // 100 MB
  * Calculates a user's Personal Drive storage usage against their allocated quota.
  */
 export async function getUserDriveQuota(userId: string): Promise<UserDriveQuotaInfo> {
-  const [user, config, usedAgg] = await Promise.all([
+  const [user, usedAgg] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, driveQuotaBytes: true },
-    }),
-    prisma.systemConfig.findUnique({
-      where: { id: "GLOBAL_CONFIG" },
-      select: {
-        defaultPersonalDriveQuotaBytes: true,
-        maxDriveFileUploadSizeBytes: true,
-      },
+      select: { id: true, driveQuotaBytes: true, tenant: { select: { driveQuotaBytes: true } } },
     }),
     prisma.driveItem.aggregate({
       where: {
@@ -42,10 +35,9 @@ export async function getUserDriveQuota(userId: string): Promise<UserDriveQuotaI
   const quotaBytes =
     user?.driveQuotaBytes && user.driveQuotaBytes > 0
       ? user.driveQuotaBytes
-      : config?.defaultPersonalDriveQuotaBytes || DEFAULT_GLOBAL_QUOTA_BYTES;
+      : DEFAULT_GLOBAL_QUOTA_BYTES;
 
-  const maxFileSizeBytes =
-    config?.maxDriveFileUploadSizeBytes || DEFAULT_MAX_FILE_SIZE_BYTES;
+  const maxFileSizeBytes = DEFAULT_MAX_FILE_SIZE_BYTES;
 
   const usedBytes = usedAgg._sum.size || 0;
   const remainingBytes = Math.max(0, quotaBytes - usedBytes);
@@ -63,6 +55,26 @@ export async function getUserDriveQuota(userId: string): Promise<UserDriveQuotaI
 }
 
 /**
+ * Checks if the user has enough available quota to upload a file of given size.
+ */
+export async function checkCanUploadToPersonalDrive(userId: string, incomingSizeBytes: number): Promise<{ canUpload: boolean; reason?: string }> {
+  const quota = await getUserDriveQuota(userId);
+  if (incomingSizeBytes > quota.maxFileSizeBytes) {
+    return {
+      canUpload: false,
+      reason: `File size exceeds the maximum upload limit of ${formatQuotaBytes(quota.maxFileSizeBytes)}.`,
+    };
+  }
+  if (quota.usedBytes + incomingSizeBytes > quota.quotaBytes) {
+    return {
+      canUpload: false,
+      reason: `Personal drive storage quota exceeded. You have ${formatQuotaBytes(quota.remainingBytes)} remaining.`,
+    };
+  }
+  return { canUpload: true };
+}
+
+/**
  * Helper to format bytes into readable string (e.g. 25 MB, 1.5 GB).
  */
 export function formatQuotaBytes(bytes: number, decimals = 1): string {
@@ -72,41 +84,4 @@ export function formatQuotaBytes(bytes: number, decimals = 1): string {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-}
-
-/**
- * Pre-upload validator to verify both single file limit and overall personal storage quota.
- */
-export async function checkCanUploadToPersonalDrive(
-  userId: string,
-  incomingSizeBytes: number
-): Promise<{
-  allowed: boolean;
-  error?: string;
-  quotaInfo: UserDriveQuotaInfo;
-}> {
-  const quotaInfo = await getUserDriveQuota(userId);
-
-  // 1. Single File Size Limit Check
-  if (incomingSizeBytes > quotaInfo.maxFileSizeBytes) {
-    return {
-      allowed: false,
-      error: `File size (${formatQuotaBytes(incomingSizeBytes)}) exceeds the maximum single file upload limit of ${formatQuotaBytes(quotaInfo.maxFileSizeBytes)}.`,
-      quotaInfo,
-    };
-  }
-
-  // 2. Personal Drive Total Storage Quota Check
-  if (quotaInfo.usedBytes + incomingSizeBytes > quotaInfo.quotaBytes) {
-    return {
-      allowed: false,
-      error: `Personal Drive storage quota exceeded! This upload requires ${formatQuotaBytes(incomingSizeBytes)}, but you only have ${formatQuotaBytes(quotaInfo.remainingBytes)} available out of your ${formatQuotaBytes(quotaInfo.quotaBytes)} quota.`,
-      quotaInfo,
-    };
-  }
-
-  return {
-    allowed: true,
-    quotaInfo,
-  };
 }

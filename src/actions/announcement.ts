@@ -4,30 +4,32 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { AnnouncementPriority } from "@prisma/client";
+import { Priority } from "@prisma/client";
 
 export async function getAnnouncements(departmentId?: string) {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const announcements = await prisma.announcement.findMany({
       where: {
-        isActive: true,
+        ...(tenantId ? { tenantId } : {}),
         OR: [
-          { targetDepartmentId: null },
-          { targetDepartmentId: departmentId },
+          { departmentId: null },
+          ...(departmentId ? [{ departmentId }] : []),
         ],
       },
       include: {
-        author: {
+        creator: {
           select: { name: true, email: true }
         },
-        targetDepartment: {
+        department: {
           select: { name: true }
         }
       },
       orderBy: { createdAt: "desc" },
     });
 
-    const session = await getServerSession(authOptions);
     let readIds = new Set<string>();
     if (session?.user?.id) {
       const reads = await prisma.announcementRead.findMany({
@@ -52,41 +54,43 @@ export async function getAnnouncements(departmentId?: string) {
 export async function createAnnouncement(data: {
   title: string;
   content: string;
-  priority: AnnouncementPriority;
-  targetDepartmentId?: string;
-  expiresAt?: Date;
+  priority: Priority;
+  departmentId?: string | null;
 }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  if (!session?.user?.id || !session.user.tenantId) return { success: false, error: "Unauthorized" };
 
   try {
+    const tenantId = session.user.tenantId;
     const announcement = await prisma.announcement.create({
       data: {
+        tenantId,
         title: data.title,
         content: data.content,
         priority: data.priority,
-        targetDepartmentId: data.targetDepartmentId || null,
-        expiresAt: data.expiresAt,
-        authorId: session.user.id,
+        departmentId: data.departmentId || null,
+        createdById: session.user.id,
       },
     });
 
     // Notify targeted users
     const usersToNotify = await prisma.user.findMany({
-      where: data.targetDepartmentId 
-        ? { departmentId: data.targetDepartmentId } 
-        : {},
+      where: {
+        tenantId,
+        ...(data.departmentId ? { departmentId: data.departmentId } : {}),
+      },
       select: { id: true }
     });
 
     if (usersToNotify.length > 0) {
-      const priorityLabel = data.priority === "CRITICAL" ? "Critical " : "";
+      const priorityLabel = data.priority === "URGENT" ? "Urgent: " : "";
       await prisma.notification.createMany({
         data: usersToNotify.map(u => ({
+          tenantId,
           userId: u.id,
           title: `${priorityLabel}New Announcement`,
-          content: data.title,
-          type: data.priority === "CRITICAL" ? "WARNING" : "INFO",
+          message: data.title,
+          type: data.priority === "URGENT" ? "WARNING" : "INFO",
           link: "/dashboard/announcements",
         }))
       });
@@ -119,27 +123,11 @@ export async function deleteAnnouncement(id: string) {
   }
 }
 
-export async function toggleAnnouncementActive(id: string, isActive: boolean) {
-  try {
-    await prisma.announcement.update({
-      where: { id },
-      data: { isActive },
-    });
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/admin/settings");
-    revalidatePath("/dashboard/accountant/settings");
-    return { success: true };
-  } catch (error) {
-    console.error("Failed to toggle announcement:", error);
-    return { success: false, error: "Failed to toggle announcement" };
-  }
-}
-
 export async function updateAnnouncement(id: string, data: {
   title: string;
   content: string;
-  priority: AnnouncementPriority;
-  targetDepartmentId?: string | null;
+  priority: Priority;
+  departmentId?: string | null;
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
@@ -151,7 +139,7 @@ export async function updateAnnouncement(id: string, data: {
         title: data.title,
         content: data.content,
         priority: data.priority,
-        targetDepartmentId: data.targetDepartmentId,
+        departmentId: data.departmentId,
       },
     });
     revalidatePath("/dashboard");
@@ -167,15 +155,18 @@ export async function updateAnnouncement(id: string, data: {
 
 export async function getAllAnnouncementsForAdmin() {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const announcements = await prisma.announcement.findMany({
+      where: tenantId ? { tenantId } : {},
       include: {
-        author: { select: { name: true, email: true } },
-        targetDepartment: { select: { name: true } }
+        creator: { select: { name: true, email: true } },
+        department: { select: { name: true } }
       },
       orderBy: { createdAt: "desc" },
     });
 
-    const session = await getServerSession(authOptions);
     let readIds = new Set<string>();
     if (session?.user?.id) {
       const reads = await prisma.announcementRead.findMany({
@@ -203,15 +194,15 @@ export async function markAnnouncementAsRead(announcementId: string) {
   try {
     await prisma.announcementRead.upsert({
       where: {
-        userId_announcementId: {
-          userId: session.user.id,
+        announcementId_userId: {
           announcementId,
+          userId: session.user.id,
         }
       },
       update: {},
       create: {
-        userId: session.user.id,
         announcementId,
+        userId: session.user.id,
       }
     });
     return { success: true };
@@ -230,15 +221,15 @@ export async function markAllAnnouncementsAsRead(announcementIds: string[]) {
       announcementIds.map(id => 
         prisma.announcementRead.upsert({
           where: {
-            userId_announcementId: {
-              userId: session.user.id,
+            announcementId_userId: {
               announcementId: id,
+              userId: session.user.id,
             }
           },
           update: {},
           create: {
-            userId: session.user.id,
             announcementId: id,
+            userId: session.user.id,
           }
         })
       )

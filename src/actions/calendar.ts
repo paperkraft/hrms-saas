@@ -40,9 +40,7 @@ export async function getCalendarEvents(month?: number, year?: number) {
 
     const nonDevUserFilter = {
       status: "ACTIVE" as const,
-      role: { not: "SYSTEM_ADMIN" as const },
       NOT: [
-        { role: "SYSTEM_ADMIN" as const },
         { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
         { roleDefinition: { code: "SYSTEM_ADMIN" } }
       ]
@@ -113,7 +111,7 @@ export async function getCalendarEvents(month?: number, year?: number) {
     // Fetch Announcements
     const announcements = await prisma.announcement.findMany({
       where: {
-        isActive: true,
+        tenantId: session.user.tenantId,
         createdAt: {
           gte: start,
           lte: end,

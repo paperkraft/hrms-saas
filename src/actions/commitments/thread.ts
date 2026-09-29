@@ -7,6 +7,7 @@ import { getLedDepartmentIds } from "@/actions/projects/core"
 
 import { getSession, isTLorManager, createThreadEntry } from "./core";
 import { logActivity } from "@/lib/activity-logger"
+import { createManyNotifications } from "@/actions/notification"
 /**
  * Manager or employee adds a reply to a negotiation thread.
  */
@@ -121,15 +122,15 @@ export async function replyToThread(
     }
 
     if (participantIds.size > 0) {
-      await prisma.notification.createMany({
-        data: Array.from(participantIds).map(userId => ({
+      await createManyNotifications(
+        Array.from(participantIds).map(userId => ({
           userId,
           title: "New Comment",
-          content: `${session.user.name} commented on "${task.name}"`,
+          message: `${session.user.name} commented on "${task.name}"`,
           type: "INFO",
           link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
         }))
-      })
+      )
       Array.from(participantIds).forEach((uId: string) => sseEmitter.emit(`notify:${uId}`))
     }
 
@@ -138,15 +139,15 @@ export async function replyToThread(
       const mentions = options.mentionedUserIds.filter(id => id !== session.user.id);
 
       if (mentions.length > 0) {
-        await prisma.notification.createMany({
-          data: mentions.map(userId => ({
+        await createManyNotifications(
+          mentions.map(userId => ({
             userId,
             title: "You were mentioned in a Task",
-            content: `${session.user.name} mentioned you in "${task.name}"`,
+            message: `${session.user.name} mentioned you in "${task.name}"`,
             type: "INFO",
             link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
           }))
-        });
+        );
         mentions.forEach((uId: string) => sseEmitter.emit(`notify:${uId}`))
       }
     }

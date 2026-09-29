@@ -157,9 +157,12 @@ export async function updateDepartmentLeader(departmentId: string, leaderId: str
 
 export async function createDepartment(name: string, parentDepartmentId?: string | null, description?: string | null) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id || !session.user.tenantId) throw new Error("Unauthorized. Please log in.")
     await authorizeAdmin()
     await prisma.department.create({
       data: {
+        tenantId: session.user.tenantId,
         name: name.trim(),
         parentDepartmentId: parentDepartmentId || null,
         description: description?.trim() || null
@@ -264,8 +267,8 @@ export async function deleteDepartment(id: string, fallbackDepartmentId?: string
       })
 
       await prisma.announcement.updateMany({
-        where: { targetDepartmentId: id },
-        data: { targetDepartmentId: fallbackDepartmentId }
+        where: { departmentId: id },
+        data: { departmentId: fallbackDepartmentId }
       })
 
       await prisma.recurringTaskSchedule.updateMany({
@@ -320,7 +323,6 @@ export async function getAdminDepartmentsData() {
         members: {
           where: {
             status: { notIn: ['RESIGNED', 'TERMINATED'] },
-            role: { not: 'SYSTEM_ADMIN' },
             NOT: [
               { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
               { roleDefinition: { code: 'SYSTEM_ADMIN' } }
@@ -333,7 +335,6 @@ export async function getAdminDepartmentsData() {
           where: {
             user: {
               status: { notIn: ['RESIGNED', 'TERMINATED'] },
-              role: { not: 'SYSTEM_ADMIN' },
               NOT: [
                 { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
                 { roleDefinition: { code: 'SYSTEM_ADMIN' } }
@@ -358,7 +359,6 @@ export async function getAdminDepartmentsData() {
             members: {
               where: {
                 status: { notIn: ['RESIGNED', 'TERMINATED'] },
-                role: { not: 'SYSTEM_ADMIN' },
                 NOT: [
                   { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
                   { roleDefinition: { code: 'SYSTEM_ADMIN' } }
@@ -371,7 +371,6 @@ export async function getAdminDepartmentsData() {
               where: {
                 user: {
                   status: { notIn: ['RESIGNED', 'TERMINATED'] },
-                  role: { not: 'SYSTEM_ADMIN' },
                   NOT: [
                     { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
                     { roleDefinition: { code: 'SYSTEM_ADMIN' } }
@@ -435,7 +434,6 @@ export async function getAdminDepartmentsData() {
     const users = await prisma.user.findMany({
       where: {
         status: { notIn: ['RESIGNED', 'TERMINATED'] },
-        role: { not: 'SYSTEM_ADMIN' },
         NOT: [
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
           { roleDefinition: { code: 'SYSTEM_ADMIN' } }

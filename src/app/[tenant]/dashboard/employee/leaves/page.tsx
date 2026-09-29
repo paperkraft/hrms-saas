@@ -38,7 +38,7 @@ async function getLeaveData() {
 
   const allowances = await prisma.allowance.findMany({
     where: { userId: session.user.id },
-    orderBy: { fromDate: 'desc' }
+    orderBy: { date: 'desc' }
   });
 
   // Calculate annual stats
@@ -86,8 +86,7 @@ async function getLeaveData() {
     })),
     allowances: allowances.map((a: typeof allowances[number]) => ({
       ...a,
-      fromDate: a.fromDate.toISOString().split('T')[0],
-      toDate: a.toDate.toISOString().split('T')[0],
+      date: a.date.toISOString().split('T')[0],
       createdAt: a.createdAt.toISOString(),
       updatedAt: a.updatedAt.toISOString(),
     })),

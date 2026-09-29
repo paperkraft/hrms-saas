@@ -5,59 +5,64 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { hasMenuAccess } from "@/lib/permissions";
+import { createNotification } from "@/actions/notification";
 
 export async function requestAllowance(data: {
-  fromDate: string;
-  toDate: string;
-  location: string;
+  date?: string | Date;
+  fromDate?: string;
+  toDate?: string;
+  location?: string;
+  amount?: number;
+  type?: string;
+  description?: string;
 }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  if (!session?.user?.id || !session.user.tenantId) {
     return { error: "Unauthorized" };
   }
 
   try {
-    const fromDate = new Date(data.fromDate);
-    const toDate = new Date(data.toDate);
-
-    if (fromDate > toDate) {
-      return { error: "From date cannot be after To date" };
-    }
+    const rawDate = data.date || data.fromDate || new Date();
+    const date = new Date(rawDate);
+    const amount = data.amount ?? 350;
+    const type = data.type || data.location || "Travel Allowance";
+    const description = data.description || (data.location ? `Location: ${data.location}` : null);
 
     const allowance = await prisma.allowance.create({
       data: {
+        tenantId: session.user.tenantId,
         userId: session.user.id,
-        fromDate,
-        toDate,
-        location: data.location,
-        status: "PENDING",
+        date,
+        amount,
+        type,
+        description,
       },
       include: {
         user: true,
       }
     });
 
-    // Notify Accountant/Admin
+    // Notify Accountant / Admin
     const accountants = await prisma.user.findMany({
       where: {
-        role: { in: ["ACCOUNTANT", "ADMIN"] }
+        tenantId: session.user.tenantId,
+        OR: [
+          { role: "ADMIN" },
+          { roleDefinition: { code: "ACCOUNTANT" } }
+        ]
       },
       select: { id: true }
     });
 
-    const startStr = fromDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const endStr = toDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const dateRange = startStr === endStr ? `for ${startStr}` : `from ${startStr} to ${endStr}`;
+    const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
     for (const acc of accountants) {
-      await prisma.notification.create({
-        data: {
-          userId: acc.id,
-          title: "New Business Meet Allowance Request",
-          content: `${allowance.user.name || allowance.user.email} requested allowance for ${data.location} (${dateRange}).`,
-          type: "INFO",
-          link: "/dashboard/accountant"
-        }
+      await createNotification({
+        userId: acc.id,
+        title: "New Allowance Request",
+        message: `${allowance.user.name || allowance.user.email} submitted allowance (${type} - ₹${amount}) for ${dateStr}.`,
+        type: "INFO",
+        link: "/dashboard/accountant"
       });
     }
 
@@ -73,7 +78,7 @@ export async function requestAllowance(data: {
 
 export async function cancelAllowance(allowanceId: string) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  if (!session?.user?.id || !session.user.tenantId) {
     return { error: "Unauthorized" };
   }
 
@@ -93,10 +98,6 @@ export async function cancelAllowance(allowanceId: string) {
       return { error: "Unauthorized to cancel this allowance request" };
     }
 
-    if (allowance.status !== "PENDING" && !isPrivileged) {
-      return { error: "Only pending allowance requests can be cancelled" };
-    }
-
     await prisma.allowance.delete({
       where: { id: allowanceId },
     });
@@ -113,27 +114,35 @@ export async function cancelAllowance(allowanceId: string) {
 
 export async function createAllowance(data: {
   userId: string;
-  fromDate: string;
-  toDate: string;
-  location: string;
+  date?: string | Date;
+  fromDate?: string;
+  toDate?: string;
+  location?: string;
+  amount?: number;
+  type?: string;
+  description?: string;
   status?: "APPROVED" | "PENDING" | "REJECTED";
 }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || !hasMenuAccess(session.user, "/dashboard/accountant")) {
+  if (!session?.user?.id || !session.user.tenantId || !hasMenuAccess(session.user, "/dashboard/accountant")) {
     return { error: "Unauthorized" };
   }
 
   try {
-    const fromDate = new Date(data.fromDate);
-    const toDate = new Date(data.toDate);
+    const rawDate = data.date || data.fromDate || new Date();
+    const date = new Date(rawDate);
+    const amount = data.amount ?? 350;
+    const type = data.type || data.location || "Travel Allowance";
+    const description = data.description || (data.location ? `Location: ${data.location}` : null);
 
     await prisma.allowance.create({
       data: {
+        tenantId: session.user.tenantId,
         userId: data.userId,
-        fromDate,
-        toDate,
-        location: data.location,
-        status: data.status || "APPROVED",
+        date,
+        amount,
+        type,
+        description,
       },
     });
 
@@ -149,29 +158,32 @@ export async function processAllowanceStatus(
   status: "APPROVED" | "REJECTED"
 ) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || !hasMenuAccess(session.user, "/dashboard/accountant")) {
+  if (!session?.user?.id || !session.user.tenantId || !hasMenuAccess(session.user, "/dashboard/accountant")) {
     return { error: "Unauthorized" };
   }
 
   try {
-    const updatedAllowance = await prisma.allowance.update({
+    const allowance = await prisma.allowance.findUnique({
       where: { id: allowanceId },
-      data: { status },
       include: { user: true }
     });
 
-    const startStr = new Date(updatedAllowance.fromDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const endStr = new Date(updatedAllowance.toDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const dateRange = startStr === endStr ? `on ${startStr}` : `from ${startStr} to ${endStr}`;
+    if (!allowance) return { error: "Allowance not found" };
 
-    await prisma.notification.create({
-      data: {
-        userId: updatedAllowance.userId,
-        title: `Allowance Request ${status.charAt(0) + status.slice(1).toLowerCase()}`,
-        content: `Your business meet allowance request for ${updatedAllowance.location} ${dateRange} has been ${status.toLowerCase()}.`,
-        type: status === "APPROVED" ? "SUCCESS" : "ERROR",
-        link: "/dashboard/employee/leaves"
-      }
+    if (status === "REJECTED") {
+      await prisma.allowance.delete({
+        where: { id: allowanceId }
+      });
+    }
+
+    const dateStr = new Date(allowance.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    await createNotification({
+      userId: allowance.userId,
+      title: `Allowance Request ${status.charAt(0) + status.slice(1).toLowerCase()}`,
+      message: `Your allowance request for ${allowance.type} on ${dateStr} has been ${status.toLowerCase()}.`,
+      type: status === "APPROVED" ? "SUCCESS" : "ERROR",
+      link: "/dashboard/employee/leaves"
     });
 
     revalidatePath("/dashboard/employee");
@@ -179,7 +191,7 @@ export async function processAllowanceStatus(
     return { success: true };
   } catch (error) {
     console.error("Failed to process allowance status:", error);
-    return { error: "Failed to update allowance status" };
+    return { error: "Failed to process allowance status" };
   }
 }
 

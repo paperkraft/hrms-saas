@@ -11,9 +11,7 @@ import { getPayrollEligibleUserWhere } from "@/lib/payroll-helper"
 import { appConfig } from "@/lib/app-config"
 
 const nonDeveloperUserFilter = {
-  role: { not: "SYSTEM_ADMIN" as const },
   NOT: [
-    { role: "SYSTEM_ADMIN" as const },
     { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
     { roleDefinition: { code: "SYSTEM_ADMIN" } }
   ]
@@ -190,12 +188,7 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
       },
       allowances: {
         where: {
-          status: "APPROVED",
-          OR: [
-            { fromDate: { gte: startOfRange, lte: endOfRange } },
-            { toDate: { gte: startOfRange, lte: endOfRange } },
-            { fromDate: { lte: startOfRange }, toDate: { gte: endOfRange } }
-          ]
+          date: { gte: startOfRange, lte: endOfRange }
         }
       },
       overtimeRequests: {
@@ -214,9 +207,11 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
   let totalAllowancesSystemWide = 0;
   let totalOvertimeHoursSystemWide = 0;
 
-  const config = await prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } });
+  const config = session.user.tenantId
+    ? await prisma.systemConfig.findUnique({ where: { tenantId: session.user.tenantId } })
+    : null;
   const lateAllowed = config?.lateMarkAllowedCount ?? 0;
-  const earlyAllowed = config?.earlyLogoffAllowedCount ?? 0;
+  const earlyAllowed = (config as any)?.earlyLogoffAllowedCount ?? 0;
 
   // Calculate the actual number of working days in the current month by excluding Sundays.
   // This dynamic value ensures accurate salary prorating regardless of the month's length (28, 29, 30, 31).
@@ -229,33 +224,28 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
   // Fetch public holidays in the current month
   const publicHolidays = await prisma.publicHoliday.findMany({
     where: {
+      tenantId: session.user.tenantId,
       date: { gte: startOfRange, lte: endOfRange }
     }
   });
   // Only count holidays that don't fall on a Sunday, as Sundays are already excluded from workingDaysInMonth
   const validHolidaysCount = publicHolidays.filter(h => h.date.getDay() !== 0).length;
 
-  const reportData = users.map(user => {
+  const reportData = (users as any[]).map(user => {
     const attendances = user.attendances;
-    const currentBalance = user.leaveBalances.find(lb => lb.month === currentMonth && lb.year === currentYear);
+    const currentBalance = user.leaveBalances.find((lb: any) => lb.month === currentMonth && lb.year === currentYear);
 
     let allowanceDays = 0;
     let allowanceDaysWithoutAttendance = 0;
     const allowanceDateStrings = new Set<string>();
 
-    user.allowances.forEach(allw => {
-      const overlapStart = allw.fromDate > startOfRange ? allw.fromDate : startOfRange;
-      const overlapEnd = allw.toDate < endOfRange ? allw.toDate : endOfRange;
-      if (overlapEnd >= overlapStart) {
-        for (let d = new Date(overlapStart); d <= overlapEnd; d.setDate(d.getDate() + 1)) {
-          allowanceDateStrings.add(d.toISOString().split('T')[0]);
-        }
-      }
+    user.allowances.forEach((allw: any) => {
+      allowanceDateStrings.add(new Date(allw.date).toISOString().split('T')[0]);
     });
 
     allowanceDays = allowanceDateStrings.size;
 
-    const attendanceDateStrings = new Set(attendances.map(a => new Date(a.date).toISOString().split('T')[0]));
+    const attendanceDateStrings = new Set(attendances.map((a: any) => new Date(a.date).toISOString().split('T')[0]));
     allowanceDateStrings.forEach(dateStr => {
       const dateObj = new Date(dateStr);
       // Only protect working days (skip Sundays)
@@ -265,7 +255,7 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
     });
 
     let paidLeaveOverlap = 0;
-    user.leaveRequests.forEach(lr => {
+    user.leaveRequests.forEach((lr: any) => {
       if (lr.status === "APPROVED" && (lr.category === "MONTHLY_POLICY_1" || lr.category === "SEMI_ANNUAL_POLICY_2")) {
         // Half-day leaves do NOT count as overlap because the employee is expected to punch in for the working half of the shift.
         // Only FULL-day leaves count as overlap if the user also punched in on a full leave day.
@@ -288,8 +278,8 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
     const policy2Used = currentBalance?.semiAnnualTaken ?? 0;
     const unpaidTaken = currentBalance?.unpaidTaken ?? 0;
 
-    const totalLate = attendances.filter(a => a.isLate).length;
-    const specialCaseLate = attendances.filter(a => a.isLate && a.isLateSpecialCase).length;
+    const totalLate = attendances.filter((a: any) => a.isLate).length;
+    const specialCaseLate = attendances.filter((a: any) => a.isLate && a.isLateSpecialCase).length;
 
     // actualLate is total late minus waived special cases
     const actualLate = totalLate - specialCaseLate;
@@ -308,23 +298,23 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
     const lateDeductionMultiplier = isNewPolicyEffective ? 1.0 : 0.5;
     const lateDeduction = punishableLate * lateDeductionMultiplier;
 
-    const earlyEnabled = config?.earlyLogoffEnabled ?? false;
-    const totalEarlyLogoff = earlyEnabled ? attendances.filter(a => (a as any).isEarlyLogoff).length : 0;
+    const earlyEnabled = (config as any)?.earlyLogoffEnabled ?? false;
+    const totalEarlyLogoff = earlyEnabled ? attendances.filter((a: any) => (a as any).isEarlyLogoff).length : 0;
     const earlyLogoffDeduction = (earlyEnabled && earlyAllowed > 0)
       ? (Math.floor(totalEarlyLogoff / earlyAllowed) * 0.5)
       : 0;
 
     // Calculate total present count considering technical half days (isHalfDay = 0.5)
     let presentCount = 0;
-    attendances.forEach(a => {
+    attendances.forEach((a: any) => {
       const aDateStr = new Date(a.date).toISOString().split('T')[0];
-      const hasHalfLeave = user.leaveRequests.some(lr => {
+      const hasHalfLeave = user.leaveRequests.some((lr: any) => {
         if (lr.duration !== "HALF") return false;
         const lStart = new Date(lr.startDate).toISOString().split('T')[0];
         const lEnd = new Date(lr.endDate).toISOString().split('T')[0];
         return aDateStr >= lStart && aDateStr <= lEnd;
       });
-      const hasShortLeave = user.leaveRequests.some(lr => {
+      const hasShortLeave = user.leaveRequests.some((lr: any) => {
         if (lr.duration !== "SHORT") return false;
         const lStart = new Date(lr.startDate).toISOString().split('T')[0];
         const lEnd = new Date(lr.endDate).toISOString().split('T')[0];
@@ -352,7 +342,7 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
 
     const holidayDateStrings = new Set(publicHolidays.filter(h => h.date.getDay() !== 0).map(h => h.date.toISOString().split('T')[0]));
 
-    attendances.forEach(a => {
+    attendances.forEach((a: any) => {
       const isSunday = new Date(a.date).getDay() === 0;
       const isHoliday = holidayDateStrings.has(new Date(a.date).toISOString().split('T')[0]);
 
@@ -428,7 +418,7 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
         short: currentBalance?.remainingShort ?? 0,
         semiAnnual: isProbation ? 0 : (currentBalance?.semiAnnualRemaining ?? 0),
       },
-      offSiteCount: attendances.filter(a => a.isOutsideOffice).length,
+      offSiteCount: (attendances as any[]).filter((a: any) => a.isOutsideOffice).length,
       isProbation
     };
   });
@@ -459,7 +449,7 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
       recentAllowances,
       recentOvertimes,
       recentGrievances,
-      announcements: announcementsRes.data?.filter(a => a.isActive) || [],
+      announcements: announcementsRes.data || [],
       notifications: notificationsRes.data || [],
       policies,
       userRole: session.user.role,
@@ -474,7 +464,7 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
         currentYear,
         currentMonth,
         date: reqDate || null,
-        earlyLogoffEnabled: config?.earlyLogoffEnabled ?? false
+        earlyLogoffEnabled: (config as any)?.earlyLogoffEnabled ?? false
       }
     }
   };

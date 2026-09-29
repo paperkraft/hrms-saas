@@ -27,8 +27,10 @@ export function Header({
 
   // Helper to get descriptive page title for all active routes
   const getPageTitle = () => {
+    const normPath = pathname ? pathname.replace(/^\/[^/]+(?=\/dashboard)/, "") : pathname;
+
     // Exact path matches for specific routes
-    switch (pathname) {
+    switch (normPath) {
       case "/dashboard/employee": return "My Space";
       case "/dashboard/external": return "My Space";
       case "/dashboard/projects": return "Project Overview";

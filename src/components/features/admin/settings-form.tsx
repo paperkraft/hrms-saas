@@ -21,7 +21,7 @@ import { triggerManualNotificationCleanup } from "@/actions/notification"
 import { LocationManagement } from "./location-management"
 import { HolidayManagement } from "./holiday-management"
 import { AnnouncementManagement } from "./announcement-management"
-import { AnnouncementPriority } from "@prisma/client"
+import { Priority } from "@prisma/client"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -66,11 +66,13 @@ interface SettingsFormProps {
         id: string;
         title: string;
         content: string;
-        priority: AnnouncementPriority;
+        priority: Priority;
         createdAt: Date;
-        isActive: boolean;
-        author: { name: string | null; email: string };
+        isActive?: boolean;
+        author?: { name: string | null; email: string };
+        creator?: { name: string | null; email: string };
         targetDepartment?: { name: string } | null;
+        department?: { name: string } | null;
     }[];
 }
 

@@ -22,6 +22,8 @@ export async function punchInOutAction(coords?: { lat: number; lng: number; accu
 
     const { start, end } = getTodayRange();
 
+    const tenantId = session.user.tenantId;
+
     // 1. Fetch user profile, system config, leave request, and attendance log in parallel
     const [user, config, approvedLeave, existingLog] = await Promise.all([
       prisma.user.findUnique({
@@ -31,7 +33,7 @@ export async function punchInOutAction(coords?: { lat: number; lng: number; accu
           additionalLocations: true
         }
       }),
-      prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } }),
+      tenantId ? prisma.systemConfig.findUnique({ where: { tenantId } }) : null,
       prisma.leaveRequest.findFirst({
         where: {
           userId: session.user.id,
@@ -182,6 +184,7 @@ export async function punchInOutAction(coords?: { lat: number; lng: number; accu
       try {
         await prisma.attendance.create({
           data: {
+            tenantId: tenantId || user.tenantId,
             userId: session.user.id,
             date: start,
             punchIn: punchInTime,
@@ -214,7 +217,7 @@ export async function punchInOutAction(coords?: { lat: number; lng: number; accu
 
       // Calculate Early Log-off
       let isEarlyLogoff = false;
-      const earlyLogoffEnabled = config?.earlyLogoffEnabled ?? false;
+      const earlyLogoffEnabled = (config as any)?.earlyLogoffEnabled ?? false;
 
       const [eH, eM] = endTime.split(":").map(Number);
       const shiftEnd = new Date(start);
@@ -238,8 +241,8 @@ export async function punchInOutAction(coords?: { lat: number; lng: number; accu
       }
 
       let isSpecialCase = false;
-      const specialCaseEnabled = config?.specialCaseEnabled ?? true; // Align with Prisma default
-      const extraMinutes = config?.specialCaseExtraMinutes ?? 0;
+      const specialCaseEnabled = (config as any)?.specialCaseEnabled ?? true; // Align with Prisma default
+      const extraMinutes = (config as any)?.specialCaseExtraMinutes ?? 0;
 
       if (specialCaseEnabled && existingLog.isLate && !existingLog.isHalfDay && !isOutsideOffice) {
         // Robust parsing for shift times
@@ -296,7 +299,7 @@ export async function punchInOutAction(coords?: { lat: number; lng: number; accu
             effectiveStartTime = approvedLeave.endTime;
           }
         }
-        const maxLateMinutes = config?.specialCaseMaxLateMinutes ?? 10;
+        const maxLateMinutes = (config as any)?.specialCaseMaxLateMinutes ?? 10;
         const [esH, esM] = effectiveStartTime.split(":").map(Number);
         const maxLateThreshold = new Date(start);
         maxLateThreshold.setHours(esH, esM + graceMinutes + maxLateMinutes, 0, 0);

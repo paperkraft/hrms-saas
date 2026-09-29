@@ -11,9 +11,11 @@ import { checkUserDriveItemAccess } from "@/actions/drive";
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.tenantId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const tenantId = session.user.tenantId;
 
     const body = await req.json();
     const { name, objectName, size, mimeType, scope, parentId, relativePath } = body;
@@ -67,37 +69,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Verify personal drive storage quota
-    if (driveScope === "PERSONAL" && size > 0) {
-      const quotaCheck = await checkCanUploadToPersonalDrive(session.user.id, size);
-      if (!quotaCheck.allowed) {
+    // Quota validation for personal drive
+    if (driveScope === "PERSONAL") {
+      const quotaCheck = await checkCanUploadToPersonalDrive(session.user.id, Number(size) || 0);
+      if (!quotaCheck.canUpload) {
         return NextResponse.json(
-          { error: quotaCheck.error, quotaInfo: quotaCheck.quotaInfo },
-          { status: 403 }
+          { error: quotaCheck.reason || "Personal Drive quota exceeded" },
+          { status: 400 }
         );
       }
     }
 
     const bucketName = getDriveBucket(driveScope);
 
-    // ── Handle Directory Hierarchy from relativePath (Folder Upload) ─────────
-    if (relativePath && typeof relativePath === "string") {
-      // Split path and strip the file name itself (last segment)
+    // Auto-create folder hierarchy if relativePath is provided
+    if (relativePath) {
       const segments = relativePath.split("/").filter(Boolean);
-      const folderSegments = segments.slice(0, -1);
+      if (segments.length > 1) {
+        // Exclude filename
+        const folderSegments = segments.slice(0, -1);
 
-      if (folderSegments.length > 0) {
         let currentParentId = targetParentId;
         let currentPath = parentPath;
         let currentDepth = parentDepth;
 
-        for (const segment of folderSegments) {
-          const trimmed = segment.trim();
+        for (const folderName of folderSegments) {
+          const trimmed = folderName.trim();
           if (!trimmed) continue;
 
-          // Find existing folder with same name under current parent
           let existingFolder = await prisma.driveItem.findFirst({
             where: {
+              tenantId,
               name: { equals: trimmed, mode: "insensitive" },
               type: "FOLDER",
               scope: driveScope,
@@ -110,6 +112,7 @@ export async function POST(req: NextRequest) {
             // Create the folder
             const createdFolder = await prisma.driveItem.create({
               data: {
+                tenantId,
                 name: trimmed,
                 type: "FOLDER",
                 scope: driveScope,
@@ -143,6 +146,7 @@ export async function POST(req: NextRequest) {
 
     const item = await prisma.driveItem.create({
       data: {
+        tenantId,
         name,
         type: "FILE",
         scope: driveScope,
@@ -159,16 +163,34 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Record initial version
+    await prisma.driveVersion.create({
+      data: {
+        driveItemId: item.id,
+        version: 1,
+        storageKey: objectName,
+        bucket: bucketName,
+        size: Number(size) || 0,
+        mimeType: mimeType || "application/octet-stream",
+        uploadedById: session.user.id,
+        changeNotes: "Initial file upload",
+      },
+    });
+
+    // Log Activity
     await prisma.driveActivity.create({
       data: {
         driveItemId: item.id,
         userId: session.user.id,
-        action: "UPLOADED",
-        details: `Uploaded file "${name}"`,
+        action: "UPLOAD_FILE",
+        details: `Uploaded file "${name}" (${size} bytes) to ${driveScope}`,
       },
     });
 
-    return NextResponse.json({ success: true, item });
+    return NextResponse.json({
+      success: true,
+      item,
+    });
   } catch (error: any) {
     console.error("[Drive Confirm Upload Error]", error);
     return NextResponse.json(

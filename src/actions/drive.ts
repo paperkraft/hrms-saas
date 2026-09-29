@@ -604,8 +604,10 @@ export async function createDriveFolder(data: {
       throw new Error(`A folder named "${folderName}" already exists here`);
     }
 
+    const tenantId = session.user.tenantId!;
     const folder = await prisma.driveItem.create({
       data: {
+        tenantId,
         name: folderName,
         type: "FOLDER",
         scope: targetScope,
@@ -1372,8 +1374,8 @@ export async function uploadDriveFile(formData: FormData) {
 
     if (scope === "PERSONAL") {
       const quotaCheck = await checkCanUploadToPersonalDrive(session.user.id, buffer.length);
-      if (!quotaCheck.allowed) {
-        throw new Error(quotaCheck.error || "Storage quota exceeded");
+      if (!quotaCheck.canUpload) {
+        throw new Error(quotaCheck.reason || "Storage quota exceeded");
       }
     }
 
@@ -1394,8 +1396,10 @@ export async function uploadDriveFile(formData: FormData) {
 
     const ext = file.name.split(".").pop()?.toLowerCase() || null;
 
+    const tenantId = session.user.tenantId!;
     const driveItem = await prisma.driveItem.create({
       data: {
+        tenantId,
         name: file.name,
         type: "FILE",
         scope,
@@ -1914,10 +1918,11 @@ export async function getDriveDuplicates(params?: {
 export async function syncDriveStorage(targetScope?: "ORGANIZATION_LIBRARY" | "PROJECT" | "PERSONAL" | "ALL") {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.tenantId) {
       throw new Error("Unauthorized");
     }
     const currentUserId = session.user.id;
+    const tenantId = session.user.tenantId;
 
     const inferMimeType = (filename: string) => {
       const ext = filename.split(".").pop()?.toLowerCase();
@@ -2055,6 +2060,7 @@ export async function syncDriveStorage(targetScope?: "ORGANIZATION_LIBRARY" | "P
             if (!folder) {
               folder = await prisma.driveItem.create({
                 data: {
+                  tenantId,
                   name: segment,
                   type: "FOLDER",
                   scope: folderScope,
@@ -2122,6 +2128,7 @@ export async function syncDriveStorage(targetScope?: "ORGANIZATION_LIBRARY" | "P
 
         const newDriveItem = await prisma.driveItem.create({
           data: {
+            tenantId,
             name: displayName,
             type: "FILE",
             scope,

@@ -24,12 +24,14 @@ export function Sidebar({
   userRole,
   isTeamLeader,
   userAllowedMenus,
-  isExternal
+  isExternal,
+  tenantSlug,
 }: {
   userRole: string;
   isTeamLeader: boolean;
   userAllowedMenus?: string[];
   isExternal?: boolean;
+  tenantSlug?: string;
 }) {
   const pathname = usePathname();
   const { setOpenMobile, isMobile } = useSidebar();
@@ -41,10 +43,13 @@ export function Sidebar({
     isExternal
   });
 
+  const normalizedPathname = pathname ? pathname.replace(/^\/[^/]+(?=\/dashboard)/, "") : pathname;
+  const homeHref = tenantSlug ? `/${tenantSlug}/dashboard` : "/dashboard";
+
   return (
     <SidebarRoot collapsible="icon">
       <SidebarHeader className="h-14 border-b border-sidebar-border p-0 flex items-center justify-center overflow-hidden">
-        <Link href="/dashboard" className="flex items-center group-data-[collapsible=icon]:justify-center w-full transition-all duration-200">
+        <Link href={homeHref} className="flex items-center group-data-[collapsible=icon]:justify-center w-full transition-all duration-200">
           <div className="flex items-center min-w-0">
             <Image
               src={appConfig.logoUrl}
@@ -82,12 +87,14 @@ export function Sidebar({
                 <SidebarMenu>
                   {visibleItems.map((item) => {
                     const isProjectOverview = item.href === "/dashboard/projects";
-                    const isSubProjectPage = pathname.startsWith("/dashboard/projects/") &&
-                      !pathname.includes("/reports") &&
-                      !pathname.includes("/activity") &&
-                      !pathname.includes("/task-master");
+                    const isSubProjectPage = (normalizedPathname.startsWith("/dashboard/projects/") || pathname.startsWith("/dashboard/projects/")) &&
+                      !normalizedPathname.includes("/reports") &&
+                      !normalizedPathname.includes("/activity") &&
+                      !normalizedPathname.includes("/task-master");
 
-                    const isActive = pathname === item.href || (isProjectOverview && isSubProjectPage);
+                    const isActive = pathname === item.href || normalizedPathname === item.href || (isProjectOverview && isSubProjectPage);
+                    const linkHref = tenantSlug ? `/${tenantSlug}${item.href}` : item.href;
+
                     return (
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
@@ -102,7 +109,7 @@ export function Sidebar({
                           )}
                         >
                           <Link
-                            href={item.href}
+                            href={linkHref}
                             className="flex items-center w-full group-data-[collapsible=icon]:justify-center"
                             onClick={() => {
                               if (isMobile) setOpenMobile(false);

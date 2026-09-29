@@ -6,21 +6,31 @@ import { logActivity } from "@/lib/activity-logger"
 import { authorizeProjectManager } from "./core";
 
 export async function createRecurringTaskSchedule(data: {
-  name: string;
-  description?: string;
   projectId: string;
   assignedToId?: string;
   departmentId?: string;
   taskMasterId?: string;
-  frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY" | string;
   nextRunAt: Date;
+  dayOfMonth?: number;
+  dayOfWeek?: number;
 }) {
   try {
     const session = await authorizeProjectManager();
+    const tenantId = session.user.tenantId;
+    if (!tenantId) throw new Error("No tenant configured");
 
     const schedule = await prisma.recurringTaskSchedule.create({
       data: {
-        ...data,
+        tenantId,
+        projectId: data.projectId,
+        assignedToId: data.assignedToId || null,
+        departmentId: data.departmentId || null,
+        taskMasterId: data.taskMasterId || null,
+        frequency: data.frequency,
+        nextRunAt: data.nextRunAt,
+        dayOfMonth: data.dayOfMonth || null,
+        dayOfWeek: data.dayOfWeek || null,
       },
     });
 
@@ -28,7 +38,7 @@ export async function createRecurringTaskSchedule(data: {
       projectId: data.projectId,
       userId: session.user.id,
       action: "CREATE_TASK",
-      details: `Created recurring task schedule: ${data.name} (${data.frequency})`,
+      details: `Created recurring task schedule (${data.frequency})`,
     });
 
     revalidatePath(`/dashboard/projects/${data.projectId}`);
@@ -41,7 +51,7 @@ export async function createRecurringTaskSchedule(data: {
 export async function triggerRecurringTasksManually() {
   try {
     const session = await authorizeProjectManager();
-    if (session.user.role !== "ADMIN" && session.user.role !== "SYSTEM_ADMIN") {
+    if (session.user.role !== "ADMIN") {
       throw new Error("Unauthorized");
     }
 
@@ -59,7 +69,7 @@ export async function triggerRecurringTasksManually() {
 export async function deleteRecurringTaskSchedule(id: string) {
   try {
     const session = await authorizeProjectManager();
-    if (session.user.role !== "ADMIN" && session.user.role !== "SYSTEM_ADMIN") {
+    if (session.user.role !== "ADMIN") {
       throw new Error("Unauthorized");
     }
 
@@ -71,8 +81,8 @@ export async function deleteRecurringTaskSchedule(id: string) {
     await logActivity({
       projectId: schedule.projectId,
       userId: session.user.id,
-      action: "DELETE_TASK", // Or a custom action
-      details: `Deleted recurring task schedule: ${schedule.name}`,
+      action: "DELETE_TASK",
+      details: `Deleted recurring task schedule: ${schedule.id}`,
     });
 
     revalidatePath(`/dashboard/projects/${schedule.projectId}`);
@@ -85,7 +95,7 @@ export async function deleteRecurringTaskSchedule(id: string) {
 export async function updateRecurringTaskSchedule(id: string, data: any) {
   try {
     const session = await authorizeProjectManager();
-    if (session.user.role !== "ADMIN" && session.user.role !== "SYSTEM_ADMIN") {
+    if (session.user.role !== "ADMIN") {
       throw new Error("Unauthorized");
     }
 
@@ -97,8 +107,8 @@ export async function updateRecurringTaskSchedule(id: string, data: any) {
     await logActivity({
       projectId: schedule.projectId,
       userId: session.user.id,
-      action: "UPDATE_TASK", // Or a custom action
-      details: `Updated recurring task schedule: ${schedule.name}`,
+      action: "UPDATE_TASK",
+      details: `Updated recurring task schedule: ${schedule.id}`,
     });
 
     revalidatePath(`/dashboard/projects/${schedule.projectId}`);

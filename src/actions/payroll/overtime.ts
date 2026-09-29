@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { hasMenuAccess } from "@/lib/permissions";
+import { createNotification, createManyNotifications } from "@/actions/notification";
 
 export async function applyForOvertime(data: {
   date: string;
@@ -12,7 +13,7 @@ export async function applyForOvertime(data: {
   reason: string;
 }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  if (!session?.user?.id || !session.user.tenantId) {
     return { error: "Unauthorized" };
   }
 
@@ -25,6 +26,7 @@ export async function applyForOvertime(data: {
     // Check if an overtime request already exists for this user on the same date
     const existingOvertime = await prisma.overtimeRequest.findFirst({
       where: {
+        tenantId: session.user.tenantId,
         userId: session.user.id,
         date: {
           gte: startOfDay,
@@ -43,9 +45,9 @@ export async function applyForOvertime(data: {
 
     // Fetch config to check max overtime hours
     const config = await prisma.systemConfig.findUnique({
-      where: { id: "GLOBAL_CONFIG" }
+      where: { tenantId: session.user.tenantId }
     });
-    const maxHours = config?.maxOvertimeHoursPerDay || 4;
+    const maxHours = (config as any)?.maxOvertimeHoursPerDay || 4;
 
     if (data.hours > maxHours) {
       return { error: `Overtime cannot exceed ${maxHours} hours per day.` };
@@ -57,8 +59,9 @@ export async function applyForOvertime(data: {
     });
     const applicantName = applicant?.name || session.user.name || "Employee";
 
-    const newOvertime = await prisma.overtimeRequest.create({
+    await prisma.overtimeRequest.create({
       data: {
+        tenantId: session.user.tenantId,
         userId: session.user.id,
         date: startOfDay,
         hours: data.hours,
@@ -71,11 +74,13 @@ export async function applyForOvertime(data: {
 
     const usersToNotify = await prisma.user.findMany({
       where: {
+        tenantId: session.user.tenantId,
         AND: [
           { id: { not: session.user.id } },
           {
             OR: [
-              { role: { in: ["ADMIN", "SYSTEM_ADMIN", "ACCOUNTANT"] } },
+              { role: "ADMIN" },
+              { roleDefinition: { code: { in: ["ADMIN", "ACCOUNTANT"] } } },
               { id: applicant?.managerId || undefined }
             ]
           }
@@ -85,31 +90,23 @@ export async function applyForOvertime(data: {
     });
 
     if (usersToNotify.length > 0) {
-      await prisma.notification.createMany({
-        data: usersToNotify.map(u => {
-          let link = "/dashboard";
-          if (["ADMIN", "SYSTEM_ADMIN", "ACCOUNTANT"].includes(u.role)) {
-            link = "/dashboard/accountant?tab=overtime";
-          }
-          return {
-            userId: u.id,
-            title: `Overtime Request: ${applicantName}`,
-            content: `${applicantName} has requested ${data.hours} hours of overtime on ${dateStr}.`,
-            type: "INFO",
-            link
-          };
-        })
-      });
+      await createManyNotifications(
+        usersToNotify.map(u => ({
+          userId: u.id,
+          title: `Overtime Request: ${applicantName}`,
+          message: `${applicantName} has requested ${data.hours} hours of overtime on ${dateStr}.`,
+          type: "INFO",
+          link: "/dashboard/accountant?tab=overtime"
+        }))
+      );
     }
 
-    await prisma.notification.create({
-      data: {
-        userId: session.user.id,
-        title: "Overtime Request Submitted",
-        content: `Your request for ${data.hours} hours of overtime on ${dateStr} is pending review.`,
-        type: "INFO",
-        link: "/dashboard"
-      }
+    await createNotification({
+      userId: session.user.id,
+      title: "Overtime Request Submitted",
+      message: `Your request for ${data.hours} hours of overtime on ${dateStr} is pending review.`,
+      type: "INFO",
+      link: "/dashboard"
     });
 
     revalidatePath("/dashboard/employee");
@@ -119,13 +116,13 @@ export async function applyForOvertime(data: {
     return { success: true };
   } catch (error) {
     console.error("Failed to apply for overtime:", error);
-    return { error: "An unexpected error occurred" };
+    return { error: "Failed to submit overtime request" };
   }
 }
 
-export async function cancelOvertimeRequest(overtimeId: string) {
+export async function cancelOvertime(overtimeId: string) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  if (!session?.user?.id || !session.user.tenantId) {
     return { error: "Unauthorized" };
   }
 
@@ -169,25 +166,37 @@ export async function processOvertimeStatus(
   status: "APPROVED" | "REJECTED"
 ) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  if (!session?.user?.id || !session.user.tenantId) {
     return { error: "Unauthorized" };
   }
 
   try {
     const overtime = await prisma.overtimeRequest.findUnique({
       where: { id: overtimeId },
-      include: { user: true }
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            managerId: true,
+            departmentId: true,
+          }
+        }
+      }
     });
 
     if (!overtime) {
       return { error: "Overtime request not found" };
     }
 
+    // Permission checks
     const isAllowedRole = hasMenuAccess(session.user, "/dashboard/accountant", "/dashboard/leaves/manage");
     const isManager = overtime.user.managerId === session.user.id;
-
+    
+    // Check if user is TL of the requester's department
     const ledDept = await prisma.department.findFirst({
-      where: { teamLeaderId: session.user.id }
+      where: { tenantId: session.user.tenantId, teamLeaderId: session.user.id }
     });
     const isTL = ledDept && overtime.user.departmentId === ledDept.id;
 
@@ -203,14 +212,12 @@ export async function processOvertimeStatus(
 
     const dateStr = new Date(updatedOvertime.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-    await prisma.notification.create({
-      data: {
-        userId: updatedOvertime.userId,
-        title: `Overtime Request ${status.charAt(0) + status.slice(1).toLowerCase()}`,
-        content: `Your request for ${updatedOvertime.hours} hours of overtime on ${dateStr} has been ${status.toLowerCase()}.`,
-        type: status === "APPROVED" ? "SUCCESS" : "ERROR",
-        link: "/dashboard/employee/leaves"
-      }
+    await createNotification({
+      userId: updatedOvertime.userId,
+      title: `Overtime Request ${status.charAt(0) + status.slice(1).toLowerCase()}`,
+      message: `Your request for ${updatedOvertime.hours} hours of overtime on ${dateStr} has been ${status.toLowerCase()}.`,
+      type: status === "APPROVED" ? "SUCCESS" : "ERROR",
+      link: "/dashboard/employee/leaves"
     });
 
     revalidatePath("/dashboard/employee");
@@ -223,3 +230,5 @@ export async function processOvertimeStatus(
     return { error: "Failed to update overtime status" };
   }
 }
+
+export const cancelOvertimeRequest = cancelOvertime;

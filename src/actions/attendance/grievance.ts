@@ -4,8 +4,10 @@ import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { GrievanceType, LeaveStatus } from "@prisma/client";
+import { GrievanceStatus } from "@prisma/client";
 import { createNotification } from "@/actions/notification";
+
+export type GrievanceType = 'FORGOT_PUNCH_IN' | 'FORGOT_PUNCH_OUT' | 'FORGOT_BOTH' | 'OTHER';
 
 export async function submitGrievance(data: {
   date: Date;
@@ -16,7 +18,7 @@ export async function submitGrievance(data: {
 }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.tenantId) {
       return { success: false, message: "Unauthorized" };
     }
 
@@ -33,29 +35,34 @@ export async function submitGrievance(data: {
       return { success: false, message: "You can only submit grievances for dates within the last 7 days." };
     }
 
+    const encodedReason = `[TYPE:${grievanceType}][IN:${requestedTime}]${requestedOutTime ? `[OUT:${requestedOutTime}]` : ''} ${reason}`;
+
     const grievance = await prisma.attendanceGrievance.create({
       data: {
+        tenantId: session.user.tenantId,
         userId: session.user.id,
         date: checkDate,
-        grievanceType,
-        requestedTime,
-        requestedOutTime,
-        reason,
-        status: LeaveStatus.PENDING,
+        reason: encodedReason,
+        status: GrievanceStatus.PENDING,
       },
     });
 
-    // Notify Manager
-    const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, managerId: true } });
+    // Notify Manager & Admins
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true, managerId: true }
+    });
     const notifyUserIds = new Set<string>();
 
     if (user?.managerId) {
       notifyUserIds.add(user.managerId);
     }
 
-    // Notify Admins and Accountants
     const privilegedUsers = await prisma.user.findMany({
-      where: { role: { in: ['ADMIN', 'ACCOUNTANT'] } },
+      where: {
+        tenantId: session.user.tenantId,
+        role: "ADMIN"
+      },
       select: { id: true }
     });
 
@@ -66,9 +73,10 @@ export async function submitGrievance(data: {
     // Send notifications
     for (const targetUserId of Array.from(notifyUserIds)) {
       await createNotification({
+        tenantId: session.user.tenantId,
         userId: targetUserId,
         title: "New Attendance Grievance",
-        content: `${user?.name || "An employee"} submitted an attendance grievance for ${checkDate.toLocaleDateString()}`,
+        message: `${user?.name || "An employee"} submitted an attendance grievance for ${checkDate.toLocaleDateString()}`,
         type: "INFO",
         link: "/dashboard/accountant?tab=grievances"
       });
@@ -103,11 +111,14 @@ export async function getEmployeeGrievances() {
 export async function getPendingGrievances(managerId?: string) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.tenantId) {
       return { success: false, message: "Unauthorized", data: [] };
     }
 
-    let whereClause: any = { status: LeaveStatus.PENDING };
+    let whereClause: any = {
+      tenantId: session.user.tenantId,
+      status: GrievanceStatus.PENDING
+    };
 
     if (managerId) {
       whereClause.user = { managerId };
@@ -131,7 +142,7 @@ export { calculateAttendanceStatusFlags };
 export async function approveGrievance(id: string, requestedTime: string, managerNote?: string) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.tenantId) {
       return { success: false, message: "Unauthorized" };
     }
 
@@ -140,65 +151,37 @@ export async function approveGrievance(id: string, requestedTime: string, manage
 
     const [hours, minutes] = requestedTime.split(':').map(Number);
 
-    // The date from DB is midnight UTC for that date.
     const targetDate = new Date(
       grievance.date.getUTCFullYear(),
       grievance.date.getUTCMonth(),
       grievance.date.getUTCDate(),
-      hours,
-      minutes,
+      hours || 9,
+      minutes || 0,
       0,
       0
     );
 
-    let targetOutDate: Date | undefined;
-    if (grievance.grievanceType === 'FORGOT_BOTH' && grievance.requestedOutTime) {
-      const [outHours, outMinutes] = grievance.requestedOutTime.split(':').map(Number);
-      targetOutDate = new Date(
-        grievance.date.getUTCFullYear(),
-        grievance.date.getUTCMonth(),
-        grievance.date.getUTCDate(),
-        outHours,
-        outMinutes,
-        0,
-        0
-      );
-    }
-
-    // 1. Mark as Approved
+    // 1. Mark as Resolved
     await prisma.attendanceGrievance.update({
       where: { id },
-      data: { status: LeaveStatus.APPROVED, managerNote },
+      data: {
+        status: GrievanceStatus.RESOLVED,
+        resolutionNote: managerNote || "Approved"
+      },
     });
 
     // 2. Fix the Attendance Record
-    const existingAttendance = await prisma.attendance.findUnique({
+    const existingAttendance = await prisma.attendance.findFirst({
       where: {
-        userId_date: {
-          userId: grievance.userId,
-          date: grievance.date,
-        }
+        tenantId: grievance.tenantId,
+        userId: grievance.userId,
+        date: grievance.date,
       }
     });
 
-    let finalPunchIn: Date | null = null;
-    let finalPunchOut: Date | null = null;
+    let finalPunchIn: Date = targetDate;
+    let finalPunchOut: Date | null = existingAttendance?.punchOut || null;
     const isOutsideOffice = existingAttendance?.isOutsideOffice || false;
-
-    if (grievance.grievanceType === 'FORGOT_PUNCH_IN') {
-      finalPunchIn = targetDate;
-      finalPunchOut = existingAttendance?.punchOut || null;
-    } else if (grievance.grievanceType === 'FORGOT_PUNCH_OUT') {
-      finalPunchIn = existingAttendance?.punchIn || targetDate;
-      finalPunchOut = targetDate;
-    } else if (grievance.grievanceType === 'FORGOT_BOTH') {
-      finalPunchIn = targetDate;
-      finalPunchOut = targetOutDate || null;
-    } else {
-      // OTHER
-      finalPunchIn = targetDate;
-      finalPunchOut = targetOutDate || existingAttendance?.punchOut || null;
-    }
 
     const { isLate, isLateSpecialCase, isEarlyLogoff, isHalfDay } = await calculateAttendanceStatusFlags(
       grievance.userId,
@@ -212,7 +195,7 @@ export async function approveGrievance(id: string, requestedTime: string, manage
       await prisma.attendance.update({
         where: { id: existingAttendance.id },
         data: {
-          punchIn: finalPunchIn || existingAttendance.punchIn,
+          punchIn: finalPunchIn,
           punchOut: finalPunchOut,
           isLate,
           isLateSpecialCase,
@@ -224,9 +207,10 @@ export async function approveGrievance(id: string, requestedTime: string, manage
     } else {
       await prisma.attendance.create({
         data: {
+          tenantId: grievance.tenantId,
           userId: grievance.userId,
           date: grievance.date,
-          punchIn: finalPunchIn || targetDate,
+          punchIn: finalPunchIn,
           punchOut: finalPunchOut,
           isLate,
           isLateSpecialCase,
@@ -240,9 +224,10 @@ export async function approveGrievance(id: string, requestedTime: string, manage
 
     // Notify employee
     await createNotification({
+      tenantId: grievance.tenantId,
       userId: grievance.userId,
       title: "Grievance Approved",
-      content: `Your attendance grievance for ${grievance.date.toLocaleDateString()} has been approved.`,
+      message: `Your attendance grievance for ${grievance.date.toLocaleDateString()} has been approved.`,
       type: "SUCCESS",
       link: "/dashboard/employee/attendance"
     });
@@ -266,14 +251,18 @@ export async function rejectGrievance(id: string, managerNote: string) {
 
     const grievance = await prisma.attendanceGrievance.update({
       where: { id },
-      data: { status: LeaveStatus.REJECTED, managerNote },
+      data: {
+        status: GrievanceStatus.REJECTED,
+        resolutionNote: managerNote
+      },
     });
 
     // Notify employee
     await createNotification({
+      tenantId: grievance.tenantId,
       userId: grievance.userId,
       title: "Grievance Rejected",
-      content: `Your attendance grievance for ${grievance.date.toLocaleDateString()} was rejected. Note: ${managerNote}`,
+      message: `Your attendance grievance for ${grievance.date.toLocaleDateString()} was rejected. Note: ${managerNote}`,
       type: "ERROR",
       link: "/dashboard/employee/attendance"
     });

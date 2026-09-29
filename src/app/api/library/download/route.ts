@@ -22,23 +22,22 @@ export async function GET(req: NextRequest) {
       return new NextResponse("Missing document ID", { status: 400 });
     }
 
-    const document = await prisma.libraryDocument.findUnique({
+    const document = await prisma.driveItem.findUnique({
       where: { id },
     });
 
-    if (!document) {
+    if (!document || !document.storageKey || !document.bucket) {
       return new NextResponse("Document not found", { status: 404 });
     }
 
-    // Fetch directly using the MinIO internal SDK connection to bypass DNS/Firewalls
+    // Fetch directly using the MinIO internal SDK connection
     const dataStream = await minioClient.getObject(
       document.bucket,
-      document.fileUrl
+      document.storageKey
     );
 
-    // Return the response directly to the client
     const headers = new Headers();
-    headers.set("Content-Type", document.type);
+    headers.set("Content-Type", document.mimeType || "application/octet-stream");
     headers.set("Content-Disposition", `${download ? 'attachment' : 'inline'}; filename="${document.name}"`);
 
     // Convert Node.js stream to Web ReadableStream

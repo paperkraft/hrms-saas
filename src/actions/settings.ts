@@ -173,8 +173,12 @@ export async function upsertLocation(data: {
       revalidatePath("/dashboard/accountant/settings")
       return { success: true, data: updated }
     } else {
+      const tenantId = session.user.tenantId;
+      if (!tenantId) return { error: "No tenant configured" };
+
       const created = await prisma.location.create({
         data: {
+          tenantId,
           name: data.name,
           address: data.address,
           startTime: data.startTime,

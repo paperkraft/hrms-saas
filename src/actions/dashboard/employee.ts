@@ -24,6 +24,7 @@ export async function getEmployeeDashboardStats() {
       where: { id: userId },
       select: {
         id: true,
+        tenantId: true,
         name: true,
         email: true,
         role: true,
@@ -225,9 +226,8 @@ export async function getEmployeeDashboardStats() {
     prisma.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { not: "SYSTEM_ADMIN" },
+        ...(user.tenantId ? { tenantId: user.tenantId } : {}),
         NOT: [
-          { role: "SYSTEM_ADMIN" },
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
           { roleDefinition: { code: "SYSTEM_ADMIN" } }
         ]
@@ -260,7 +260,7 @@ export async function getEmployeeDashboardStats() {
     prisma.attendance.findMany({
       where: {
         date: { gte: startOfThisMonth, lte: endOfThisMonth },
-        user: { role: { notIn: ["SYSTEM_ADMIN", "ADMIN"] } }
+        user: { role: { not: "ADMIN" } }
       },
       select: {
         isLate: true,

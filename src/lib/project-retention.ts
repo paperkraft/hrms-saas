@@ -6,79 +6,49 @@ export async function processRetentionNotifications() {
   let count = 0;
 
   try {
-    // Find all projects where retentionEndDate is in the past and they haven't been notified
     const expiredProjects = await prisma.project.findMany({
       where: {
-        retentionEndDate: {
-          lte: new Date(), // End date is now or in the past
+        endDate: {
+          lte: new Date(),
         },
-        retentionNotified: false,
+        status: "COMPLETED",
       },
     });
 
     if (expiredProjects.length === 0) {
-      console.log("[CRON] No projects found with expired retention periods.");
+      console.log("[CRON] No completed projects with past end dates found.");
       return 0;
     }
 
-    console.log(`[CRON] Found ${expiredProjects.length} projects with expired retention periods.`);
-
-    // Find all Admin and Accountant users
+    // Find all Admin users
     const managementUsers = await prisma.user.findMany({
       where: {
-        role: {
-          in: ["ADMIN", "ACCOUNTANT", "SYSTEM_ADMIN"],
-        },
+        role: "ADMIN",
       },
-      select: { id: true },
+      select: { id: true, tenantId: true },
     });
 
     for (const project of expiredProjects) {
-      const usersToNotify = new Set(managementUsers.map((u) => u.id));
+      const tenantAdmins = managementUsers.filter(u => u.tenantId === project.tenantId);
 
-      // Try to find the Project Coordinator and Document Manager by name
-      const namesToFind = [];
-      if (project.projectCoordinateName) namesToFind.push(project.projectCoordinateName);
-      if (project.documentManagerName) namesToFind.push(project.documentManagerName);
-
-      if (namesToFind.length > 0) {
-        const matchingUsers = await prisma.user.findMany({
-          where: {
-            OR: [
-              { name: { in: namesToFind } },
-              { email: { in: namesToFind } },
-            ],
-          },
-          select: { id: true },
-        });
-
-        matchingUsers.forEach((u) => usersToNotify.add(u.id));
-      }
-
-      // Create notifications for all relevant users
-      for (const userId of Array.from(usersToNotify)) {
+      for (const admin of tenantAdmins) {
         await createNotification({
-          userId,
-          title: "Project Retention Expired",
-          content: `The retention period for project "${project.name}" has expired.`,
-          type: "WARNING",
-          link: `/dashboard/projects/${project.id}`,
+          tenantId: project.tenantId,
+          userId: admin.id,
+          title: "Project Completed & Archived",
+          message: `The project "${project.name}" has completed its planned lifecycle.`,
+          type: "INFO",
+          link: `/dashboard/projects`,
         });
       }
-
-      // Mark the project as notified
-      await prisma.project.update({
-        where: { id: project.id },
-        data: { retentionNotified: true },
-      });
 
       count++;
     }
 
-    console.log(`[CRON] Processed retention notifications for ${count} projects.`);
+    console.log(`[CRON] Processed notifications for ${count} projects.`);
     return count;
   } catch (error) {
-    console.error("[CRON] Error processing retention notifications:", error);
-    throw error;
+    console.error("[CRON] Error processing project checks:", error);
+    return 0;
   }
 }

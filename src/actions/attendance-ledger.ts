@@ -60,18 +60,15 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
     // Get all allowances for the month
     const allowances = await prisma.allowance.findMany({
         where: {
-            status: "APPROVED",
-            OR: [
-                { fromDate: { gte: startOfRange, lte: endOfRange } },
-                { toDate: { gte: startOfRange, lte: endOfRange } },
-                { fromDate: { lte: startOfRange }, toDate: { gte: endOfRange } }
-            ]
+            tenantId: session.user.tenantId,
+            date: { gte: startOfRange, lte: endOfRange },
         },
         select: {
             userId: true,
-            location: true,
-            fromDate: true,
-            toDate: true
+            type: true,
+            description: true,
+            date: true,
+            amount: true,
         }
     });
 
@@ -252,9 +249,9 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
         let allowanceFromDate = '';
         let allowanceToDate = '';
         if (userAllowance) {
-            allowanceText = userAllowance.location || 'Travel Allowance';
-            allowanceFromDate = format(new Date(userAllowance.fromDate), 'MMM dd');
-            allowanceToDate = format(new Date(userAllowance.toDate), 'MMM dd');
+            allowanceText = userAllowance.type || 'Allowance';
+            allowanceFromDate = format(new Date(userAllowance.date), 'MMM dd');
+            allowanceToDate = format(new Date(userAllowance.date), 'MMM dd');
         }
 
         return {

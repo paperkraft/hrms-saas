@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { createAnnouncement } from "@/actions/announcement"
-import { AnnouncementPriority } from "@prisma/client"
+import { Priority } from "@prisma/client"
 import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { useRouter } from "next/navigation"
 
@@ -23,7 +23,7 @@ export function CreateAnnouncementDialog({ departments }: CreateAnnouncementDial
   // Form State
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
-  const [priority, setPriority] = useState<AnnouncementPriority>("INFO")
+  const [priority, setPriority] = useState<Priority>("LOW")
   const [targetDept, setTargetDept] = useState("all")
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -35,14 +35,14 @@ export function CreateAnnouncementDialog({ departments }: CreateAnnouncementDial
       title,
       content,
       priority,
-      targetDepartmentId: targetDept === "all" ? undefined : targetDept,
+      departmentId: targetDept === "all" ? undefined : targetDept,
     })
 
     if (res.success && res.data) {
       setOpen(false)
       setTitle("")
       setContent("")
-      setPriority("INFO")
+      setPriority("LOW")
       setTargetDept("all")
       router.refresh()
       window.location.reload()
@@ -91,14 +91,15 @@ export function CreateAnnouncementDialog({ departments }: CreateAnnouncementDial
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">Priority Level</label>
-                <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
+                <Select value={priority} onValueChange={(v: Priority) => setPriority(v)}>
                   <SelectTrigger className="w-full h-9.5 bg-background border-border/80 rounded-lg text-xs font-medium">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
-                    <SelectItem value="INFO" className="text-xs">General / Information</SelectItem>
-                    <SelectItem value="WARNING" className="text-xs">Warning / Important</SelectItem>
-                    <SelectItem value="CRITICAL" className="text-xs">Critical / Action Required</SelectItem>
+                    <SelectItem value="LOW" className="text-xs">General / Normal</SelectItem>
+                    <SelectItem value="MEDIUM" className="text-xs">Medium Priority</SelectItem>
+                    <SelectItem value="HIGH" className="text-xs">High / Important</SelectItem>
+                    <SelectItem value="URGENT" className="text-xs">Urgent / Action Required</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

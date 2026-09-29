@@ -128,7 +128,7 @@ export async function generateAllMonthlyBalances() {
 
   const users = await prisma.user.findMany({
     where: {
-      role: { in: ["EMPLOYEE", "ACCOUNTANT"] }
+      status: "ACTIVE"
     },
     select: { id: true }
   });

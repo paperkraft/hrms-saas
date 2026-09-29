@@ -91,7 +91,7 @@ export default async function ProjectMasterReportPage() {
   const ledDepartmentIds = Array.from(ledDepartmentIdsSet)
 
   const rawUsers = await prisma.user.findMany({
-    where: { role: { not: "SYSTEM_ADMIN" } },
+    where: { status: "ACTIVE" },
     select: { id: true, name: true, email: true, departmentId: true, role: true, ledDepartments: { select: { id: true } } },
     orderBy: { name: 'asc' }
   })
@@ -177,9 +177,10 @@ export default async function ProjectMasterReportPage() {
       ])
 
       let extProject = extProjectResult
-      if (!extProject) {
+      if (!extProject && session?.user?.tenantId) {
         extProject = await prisma.project.create({
           data: {
+            tenantId: session.user.tenantId,
             name: "External",
             description: "Dedicated project workspace for external collaborator deliverables and tasks",
             status: "ACTIVE"

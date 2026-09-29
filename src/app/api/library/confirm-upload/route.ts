@@ -7,48 +7,35 @@ import { getLibraryBucket } from "@/lib/drive-storage";
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.tenantId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
-    const { objectName, filename, size, type, category: rawCategory, bucket } = body;
+    const { objectName, filename, size, type, bucket } = body;
 
     if (!objectName || !filename) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const trimmedCategory = (rawCategory || "").split('/').map((s: string) => s.trim()).filter(Boolean).join('/');
-    let category = trimmedCategory || "Uncategorized";
-
-    // Re-use existing category casing
-    const existingDoc = await prisma.libraryDocument.findFirst({
-      where: {
-        category: {
-          equals: category,
-          mode: 'insensitive'
-        }
-      }
-    });
-
-    if (existingDoc && existingDoc.category) {
-      category = existingDoc.category;
-    }
-
-    const document = await prisma.libraryDocument.create({
+    const document = await prisma.driveItem.create({
       data: {
+        tenantId: session.user.tenantId,
         name: filename,
-        fileUrl: objectName,
-        size: Number(size),
-        type: type || "application/octet-stream",
-        category: category,
+        storageKey: objectName,
+        size: Number(size) || 0,
+        mimeType: type || "application/octet-stream",
         bucket: bucket || getLibraryBucket(),
-        uploadedBy: session.user.id,
+        ownerId: session.user.id,
+        createdBy: session.user.id,
+        type: "FILE",
+        scope: "ORGANIZATION_LIBRARY",
       },
     });
 
     await prisma.activityLog.create({
       data: {
+        tenantId: session.user.tenantId,
         userId: session.user.id,
         action: "UPLOADED_DOCUMENT",
         details: `Uploaded library document: ${filename}`,
@@ -58,9 +45,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, document });
   } catch (error: any) {
     console.error("[Library Confirm Upload Error]", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to confirm upload" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message || "Failed to confirm upload" }, { status: 500 });
   }
 }

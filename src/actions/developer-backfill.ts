@@ -82,7 +82,6 @@ export async function getBackfillEmployees() {
 
     const users = await prisma.user.findMany({
       where: {
-        role: { not: "SYSTEM_ADMIN" },
         status: "ACTIVE",
         NOT: {
           roleDefinition: {
@@ -437,12 +436,10 @@ export async function executeBackfillAttendance(
         flags.isLateSpecialCase ||
         false;
 
-      const existing = await prisma.attendance.findUnique({
+      const existing = await prisma.attendance.findFirst({
         where: {
-          userId_date: {
-            userId,
-            date: targetDate,
-          },
+          userId,
+          date: targetDate,
         },
       });
 
@@ -462,21 +459,25 @@ export async function executeBackfillAttendance(
           updatedCount++;
         }
       } else {
-        await prisma.attendance.create({
-          data: {
-            userId,
-            date: targetDate,
-            punchIn: punchInDate,
-            punchOut: punchOutDate,
-            isLate: flags.isLate,
-            isLateSpecialCase: finalIsSpecialCase,
-            isHalfDay: flags.isHalfDay,
-            isEarlyLogoff: flags.isEarlyLogoff,
-            isOutsideOffice: false,
-            isAutoPunchOut: false,
-          },
-        });
-        createdCount++;
+        const u = await prisma.user.findUnique({ where: { id: userId }, select: { tenantId: true } });
+        if (u) {
+          await prisma.attendance.create({
+            data: {
+              tenantId: u.tenantId,
+              userId,
+              date: targetDate,
+              punchIn: punchInDate,
+              punchOut: punchOutDate,
+              isLate: flags.isLate,
+              isLateSpecialCase: finalIsSpecialCase,
+              isHalfDay: flags.isHalfDay,
+              isEarlyLogoff: flags.isEarlyLogoff,
+              isOutsideOffice: false,
+              isAutoPunchOut: false,
+            },
+          });
+          createdCount++;
+        }
       }
     }
 

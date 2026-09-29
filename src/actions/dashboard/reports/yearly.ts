@@ -64,7 +64,7 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
       },
       user: {
         role: {
-          notIn: ["SYSTEM_ADMIN", "ADMIN"]
+          not: "ADMIN"
         }
       }
     },
@@ -295,7 +295,7 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
         t.status === "IN_REVIEW" &&
         !t.tlApproved &&
         (!t.reviewerId || t.reviewerId === tl.id) &&
-        !(t.reviewer?.role === "ADMIN" || t.reviewer?.role === "SYSTEM_ADMIN")
+        !(t.reviewer?.role === "ADMIN")
       );
 
       const completedReviews = deptTasks.filter(t => {

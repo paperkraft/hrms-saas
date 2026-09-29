@@ -25,14 +25,15 @@ async function authorizeAdminAccess() {
 
 export async function verifyPayrollPin(pin: string) {
   try {
-    await authorizeAccountantAccess();
+    const session = await authorizeAccountantAccess();
 
     if (!pin || typeof pin !== "string") {
       return { success: false, error: "PIN is required." };
     }
 
-    const config = await prisma.systemConfig.findFirst();
-    const expectedPin = config?.payrollPin || "1234";
+    const tenantId = session.user.tenantId;
+    const config = tenantId ? await prisma.systemConfig.findUnique({ where: { tenantId } }) : null;
+    const expectedPin = (config as any)?.payrollPin || "1234";
 
     if (pin.trim() !== expectedPin.trim()) {
       return { success: false, error: "Incorrect Security PIN. Please try again." };
@@ -46,7 +47,7 @@ export async function verifyPayrollPin(pin: string) {
 
 export async function updatePayrollPin(currentPin: string, newPin: string) {
   try {
-    await authorizeAccountantAccess();
+    const session = await authorizeAccountantAccess();
 
     if (!currentPin || !newPin) {
       return { success: false, error: "Both current and new PIN are required." };
@@ -57,8 +58,11 @@ export async function updatePayrollPin(currentPin: string, newPin: string) {
       return { success: false, error: "New PIN must be exactly 4 numeric digits." };
     }
 
-    const config = await prisma.systemConfig.findFirst();
-    const expectedPin = config?.payrollPin || "1234";
+    const tenantId = session.user.tenantId;
+    if (!tenantId) return { success: false, error: "Tenant not found" };
+
+    const config = await prisma.systemConfig.findUnique({ where: { tenantId } });
+    const expectedPin = (config as any)?.payrollPin || "1234";
 
     if (currentPin.trim() !== expectedPin.trim()) {
       return { success: false, error: "Current PIN is incorrect." };
@@ -67,11 +71,11 @@ export async function updatePayrollPin(currentPin: string, newPin: string) {
     if (config) {
       await prisma.systemConfig.update({
         where: { id: config.id },
-        data: { payrollPin: trimmedNew },
+        data: { payrollPin: trimmedNew } as any,
       });
     } else {
       await prisma.systemConfig.create({
-        data: { id: "GLOBAL_CONFIG", payrollPin: trimmedNew },
+        data: { tenantId, payrollPin: trimmedNew } as any,
       });
     }
 
@@ -88,6 +92,8 @@ export async function adminResetPayrollPin(options?: { newPin?: string; resetToD
   try {
     const session = await authorizeAdminAccess();
     const userId = session.user.id;
+    const tenantId = session.user.tenantId;
+    if (!tenantId) return { success: false, error: "Tenant not found" };
 
     let targetPin = "1234";
     let isResetDefault = true;
@@ -101,21 +107,22 @@ export async function adminResetPayrollPin(options?: { newPin?: string; resetToD
       isResetDefault = false;
     }
 
-    const config = await prisma.systemConfig.findFirst();
+    const config = await prisma.systemConfig.findUnique({ where: { tenantId } });
 
     if (config) {
       await prisma.systemConfig.update({
         where: { id: config.id },
-        data: { payrollPin: targetPin },
+        data: { payrollPin: targetPin } as any,
       });
     } else {
       await prisma.systemConfig.create({
-        data: { id: "GLOBAL_CONFIG", payrollPin: targetPin },
+        data: { tenantId, payrollPin: targetPin } as any,
       });
     }
 
     if (userId) {
       await logActivity({
+        tenantId,
         userId,
         action: isResetDefault ? "PAYROLL_PIN_RESET_DEFAULT" : "PAYROLL_PIN_ADMIN_OVERRIDE",
         details: isResetDefault
@@ -145,8 +152,9 @@ export async function getPayrollPinStatus() {
   try {
     const session = await authorizeAccountantAccess();
     const isAdmin = isAdminRole(session.user);
-    const config = await prisma.systemConfig.findFirst();
-    const pin = config?.payrollPin || "1234";
+    const tenantId = session.user.tenantId;
+    const config = tenantId ? await prisma.systemConfig.findUnique({ where: { tenantId } }) : null;
+    const pin = (config as any)?.payrollPin || "1234";
     return {
       success: true,
       data: {
@@ -159,4 +167,3 @@ export async function getPayrollPinStatus() {
     return { success: false, error: error.message };
   }
 }
-

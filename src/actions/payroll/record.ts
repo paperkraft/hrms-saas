@@ -99,9 +99,7 @@ export async function getPayrollRecords(month: number, year: number) {
       month,
       year,
       user: {
-        role: { not: "SYSTEM_ADMIN" },
         NOT: [
-          { role: "SYSTEM_ADMIN" },
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
           { roleDefinition: { code: "SYSTEM_ADMIN" } }
         ]
@@ -322,6 +320,7 @@ export async function generateMonthlyPayroll(month: number, year: number, forceR
     if (netSalary < 0) netSalary = 0;
 
     payrollsToUpsert.push({
+      tenantId: session.user.tenantId,
       userId: user.id,
       month,
       year,
@@ -359,7 +358,8 @@ export async function generateMonthlyPayroll(month: number, year: number, forceR
     payrollsToUpsert.map(p =>
       prisma.payrollRecord.upsert({
         where: {
-          userId_month_year: {
+          tenantId_userId_month_year: {
+            tenantId: session.user.tenantId!,
             userId: p.userId,
             month: p.month,
             year: p.year

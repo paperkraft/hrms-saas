@@ -74,7 +74,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
       },
       user: {
         role: {
-          notIn: ["SYSTEM_ADMIN", "ADMIN"]
+          not: "ADMIN"
         }
       }
     },
@@ -180,11 +180,10 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
     select: {
       id: true,
       name: true,
-      client: true,
+      code: true,
       status: true,
-      timeLimit: true,
-      dateOfWorkOrder: true,
-      projectCoordinateName: true,
+      startDate: true,
+      endDate: true,
       tasks: {
         select: {
           id: true,
@@ -220,9 +219,9 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
       health = "ON_HOLD";
     } else if (total === 0) {
       health = "NO_TASKS";
-    } else if (p.timeLimit && new Date(p.timeLimit) < now && rate < 100) {
+    } else if (p.endDate && new Date(p.endDate) < now && rate < 100) {
       health = "DELAYED";
-    } else if (overdue > 0 || (p.timeLimit && (new Date(p.timeLimit).getTime() - now.getTime()) / (1000 * 60 * 60 * 24) <= 7 && rate < 60)) {
+    } else if (overdue > 0 || (p.endDate && (new Date(p.endDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24) <= 7 && rate < 60)) {
       health = "AT_RISK";
     } else {
       health = "ON_TRACK";
@@ -231,11 +230,11 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
     return {
       id: p.id,
       name: p.name,
-      client: p.client,
+      client: p.code || "Internal",
       status: p.status,
-      timeLimit: p.timeLimit ? p.timeLimit.toISOString() : null,
-      dateOfWorkOrder: p.dateOfWorkOrder ? p.dateOfWorkOrder.toISOString() : null,
-      projectCoordinateName: p.projectCoordinateName,
+      timeLimit: p.endDate ? p.endDate.toISOString() : null,
+      dateOfWorkOrder: p.startDate ? p.startDate.toISOString() : null,
+      projectCoordinateName: null,
       total,
       completed,
       inProgress,
@@ -554,7 +553,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
         t.status === "IN_REVIEW" &&
         !t.tlApproved &&
         (!t.reviewerId || t.reviewerId === tl.id) &&
-        !(t.reviewer?.role === "ADMIN" || t.reviewer?.role === "SYSTEM_ADMIN")
+        !(t.reviewer?.role === "ADMIN")
       );
 
       const completedReviews = deptTasks.filter(t => {

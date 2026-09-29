@@ -173,9 +173,8 @@ export async function getAdminDashboardStats(reqDate?: string) {
     prisma.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { not: "SYSTEM_ADMIN" },
+        ...(session.user.tenantId ? { tenantId: session.user.tenantId } : {}),
         NOT: [
-          { role: "SYSTEM_ADMIN" },
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
           { roleDefinition: { code: "SYSTEM_ADMIN" } }
         ]
@@ -396,7 +395,7 @@ export async function getAdminDashboardStats(reqDate?: string) {
         halfDayType: l.halfDayType,
         leaveType: l.category === "UNPAID" ? "Unpaid" : "Paid"
       })),
-      announcements: announcementsRes.data?.filter(a => a.isActive) || [],
+      announcements: announcementsRes.data || [],
       notifications: notificationsRes.data || [],
       policies,
       allPendingRequests: allPendingRequests.map((req: any) => ({

@@ -52,7 +52,6 @@ export async function getUsersForAdjustment() {
 
     const users = await prisma.user.findMany({
       where: {
-        role: { not: 'SYSTEM_ADMIN' },
         status: 'ACTIVE',
         NOT: {
           roleDefinition: {
@@ -99,16 +98,20 @@ export async function createAttendanceAction(data: {
     const targetDate = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate()));
 
     // Check if record already exists
-    const existing = await prisma.attendance.findUnique({
-      where: { userId_date: { userId: data.userId, date: targetDate } }
+    const existing = await prisma.attendance.findFirst({
+      where: { userId: data.userId, date: targetDate }
     });
 
     if (existing) {
       return { success: false, error: "An attendance record already exists for this user on this date." };
     }
 
+    const u = await prisma.user.findUnique({ where: { id: data.userId }, select: { tenantId: true } });
+    if (!u) return { success: false, error: "User not found" };
+
     await prisma.attendance.create({
       data: {
+        tenantId: u.tenantId,
         userId: data.userId,
         date: targetDate,
         punchIn: data.punchIn,

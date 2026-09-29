@@ -21,17 +21,20 @@ if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   }
 }
 
-
 export async function getNotifications(limit?: number) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   try {
     const { start, end } = getTodayRange();
+    const tenantId = session.user.tenantId;
 
     const [notifications, user, config, todaysLog] = await Promise.all([
       prisma.notification.findMany({
-        where: { userId: session.user.id },
+        where: {
+          userId: session.user.id,
+          ...(tenantId ? { tenantId } : {})
+        },
         orderBy: { createdAt: "desc" },
         ...(limit ? { take: limit } : {}),
       }),
@@ -41,18 +44,28 @@ export async function getNotifications(limit?: number) {
           location: { select: { startTime: true, endTime: true } }
         }
       }),
-      prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } }),
+      tenantId ? prisma.systemConfig.findUnique({ where: { tenantId } }) : null,
       prisma.attendance.findFirst({
-        where: { userId: session.user.id, date: { gte: start, lte: end } }
+        where: {
+          userId: session.user.id,
+          ...(tenantId ? { tenantId } : {}),
+          date: { gte: start, lte: end }
+        }
       })
     ]);
 
     const startTime = user?.location?.startTime || config?.defaultOfficeStartTime || "09:00";
     const endTime = user?.location?.endTime || config?.defaultOfficeEndTime || "18:00";
 
+    const formattedNotifications = notifications.map(n => ({
+      ...n,
+      content: n.message,
+      isRead: n.read,
+    }));
+
     return { 
       success: true, 
-      data: notifications as any[],
+      data: formattedNotifications as any[],
       attendance: {
         startTime,
         endTime,
@@ -82,9 +95,11 @@ function isCheckInOutNotification(title?: string): boolean {
 export async function createNotification(data: {
   userId: string;
   title: string;
-  content: string;
-  type?: "INFO" | "SUCCESS" | "WARNING" | "ERROR";
+  content?: string;
+  message?: string;
+  type?: "INFO" | "SUCCESS" | "WARNING" | "ERROR" | string;
   link?: string;
+  tenantId?: string;
 }) {
   try {
     let targetUserId = data.userId;
@@ -95,43 +110,48 @@ export async function createNotification(data: {
       targetUserId = session.user.id;
     }
 
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        tenantId: true,
+        isExternal: true,
+        role: true,
+        roleDefinition: {
+          select: { isExternal: true, code: true }
+        }
+      }
+    });
+
+    if (!targetUser) return { success: false, error: "User not found" };
+
     // Suppress check in/out notifications for external users
     if (isCheckInOutNotification(data.title)) {
-      const targetUser = await prisma.user.findUnique({
-        where: { id: targetUserId },
-        select: {
-          isExternal: true,
-          role: true,
-          roleDefinition: {
-            select: { isExternal: true, code: true }
-          }
-        }
-      });
-
       if (
-        targetUser &&
-        (targetUser.isExternal ||
-          targetUser.role === "EXTERNAL_USER" ||
-          (targetUser.role as string) === "EXTERNAL" ||
-          targetUser.roleDefinition?.isExternal ||
-          targetUser.roleDefinition?.code === "EXTERNAL_USER")
+        targetUser.isExternal ||
+        targetUser.roleDefinition?.isExternal ||
+        targetUser.roleDefinition?.code === "EXTERNAL_USER"
       ) {
         return { success: true, message: "Suppressed check in/out notification for external user" };
       }
     }
 
+    const tenantId = data.tenantId || targetUser.tenantId;
+    const messageContent = data.message || data.content || "";
+
     const notification = await prisma.notification.create({
       data: {
+        tenantId,
         userId: targetUserId,
         title: data.title,
-        content: data.content,
+        message: messageContent,
         type: data.type || "INFO",
         link: data.link,
       },
     });
     revalidatePath("/dashboard");
 
-    // 2. Send Web Push Notification
+    // Send Web Push Notification
     try {
       const subscriptions = await prisma.pushSubscription.findMany({
         where: { userId: targetUserId }
@@ -139,7 +159,7 @@ export async function createNotification(data: {
 
       const payload = JSON.stringify({
         title: data.title,
-        content: data.content,
+        content: messageContent,
         link: data.link || "/dashboard"
       });
 
@@ -155,7 +175,6 @@ export async function createNotification(data: {
           payload
         ).catch(async (err: any) => {
           if (err.statusCode === 410 || err.statusCode === 404) {
-            console.log(`[Push] Removing expired/invalid subscription for user ${targetUserId}`);
             await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
           } else {
             console.error(`[Push] Error sending to ${sub.endpoint.slice(0, 30)}...:`, err.statusCode || err.message);
@@ -178,55 +197,61 @@ export async function createNotification(data: {
 export async function createManyNotifications(notifications: {
   userId: string;
   title: string;
-  content: string;
-  type?: "INFO" | "SUCCESS" | "WARNING" | "ERROR";
+  content?: string;
+  message?: string;
+  type?: "INFO" | "SUCCESS" | "WARNING" | "ERROR" | string;
   link?: string;
+  tenantId?: string;
 }[]) {
   try {
     if (!notifications || notifications.length === 0) return { success: true };
 
-    let formattedData = notifications.map(n => ({
-      userId: n.userId,
-      title: n.title,
-      content: n.content,
-      type: n.type || "INFO",
-      link: n.link,
-    }));
+    const userIds = Array.from(new Set(notifications.map(n => n.userId)));
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        tenantId: true,
+        isExternal: true,
+        role: true,
+        roleDefinition: {
+          select: { isExternal: true, code: true }
+        }
+      }
+    });
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    let formattedData = notifications
+      .map(n => {
+        const u = userMap.get(n.userId);
+        if (!u) return null;
+        return {
+          tenantId: n.tenantId || u.tenantId,
+          userId: n.userId,
+          title: n.title,
+          message: n.message || n.content || "",
+          type: n.type || "INFO",
+          link: n.link,
+          user: u,
+        };
+      })
+      .filter((n): n is NonNullable<typeof n> => n !== null);
 
     // Suppress check in/out notifications for external users
-    const hasCheckInOut = formattedData.some(n => isCheckInOutNotification(n.title));
-    if (hasCheckInOut) {
-      const userIdsToCheck = Array.from(
-        new Set(
-          formattedData
-            .filter(n => isCheckInOutNotification(n.title))
-            .map(n => n.userId)
-        )
+    formattedData = formattedData.filter(n => {
+      if (!isCheckInOutNotification(n.title)) return true;
+      return !(
+        n.user.isExternal ||
+        n.user.roleDefinition?.isExternal ||
+        n.user.roleDefinition?.code === "EXTERNAL_USER"
       );
-
-      const externalUsers = await prisma.user.findMany({
-        where: {
-          id: { in: userIdsToCheck },
-          OR: [
-            { isExternal: true },
-            { role: { in: ["EXTERNAL_USER", "EXTERNAL" as any] } },
-            { roleDefinition: { isExternal: true } },
-            { roleDefinition: { code: "EXTERNAL_USER" } }
-          ]
-        },
-        select: { id: true }
-      });
-
-      const externalUserIds = new Set(externalUsers.map(u => u.id));
-      formattedData = formattedData.filter(
-        n => !isCheckInOutNotification(n.title) || !externalUserIds.has(n.userId)
-      );
-    }
+    });
 
     if (formattedData.length === 0) return { success: true };
 
     await prisma.notification.createMany({
-      data: formattedData,
+      data: formattedData.map(({ user, ...rest }) => rest),
     });
     
     revalidatePath("/dashboard");
@@ -244,7 +269,7 @@ export async function createManyNotifications(notifications: {
 
         const payload = JSON.stringify({
           title: data.title,
-          content: data.content,
+          content: data.message,
           link: data.link || "/dashboard"
         });
 
@@ -284,7 +309,7 @@ export async function markAsRead(id: string) {
   try {
     await prisma.notification.update({
       where: { id },
-      data: { isRead: true },
+      data: { read: true },
     });
     revalidatePath("/dashboard");
     return { success: true };
@@ -300,8 +325,8 @@ export async function markAllAsRead() {
 
   try {
     await prisma.notification.updateMany({
-      where: { userId: session.user.id, isRead: false },
-      data: { isRead: true },
+      where: { userId: session.user.id, read: false },
+      data: { read: true },
     });
     revalidatePath("/dashboard");
     return { success: true };
@@ -342,22 +367,25 @@ export async function clearAllNotifications() {
 
 export async function notifyIncompleteProfiles() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SYSTEM_ADMIN")) {
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "TEAM_LEADER")) {
     return { success: false, error: "Unauthorized" };
   }
 
   try {
     const incompleteUsers = await prisma.user.findMany({
-      where: getPayrollEligibleUserWhere({
-        OR: [
-          { phoneNumber: null }, { phoneNumber: "" },
-          { dateOfBirth: null },
-          { emergencyContactName: null }, { emergencyContactName: "" },
-          { emergencyContactPhone: null }, { emergencyContactPhone: "" },
-          { emergencyContactRelation: null }, { emergencyContactRelation: "" }
-        ]
-      }),
-      select: { id: true, name: true, email: true }
+      where: {
+        ...(session.user.tenantId ? { tenantId: session.user.tenantId } : {}),
+        ...getPayrollEligibleUserWhere({
+          OR: [
+            { phoneNumber: null }, { phoneNumber: "" },
+            { dateOfBirth: null },
+            { emergencyContactName: null }, { emergencyContactName: "" },
+            { emergencyContactPhone: null }, { emergencyContactPhone: "" },
+            { emergencyContactRelation: null }, { emergencyContactRelation: "" }
+          ]
+        })
+      },
+      select: { id: true, name: true, email: true, tenantId: true }
     });
 
     if (incompleteUsers.length === 0) {
@@ -365,9 +393,10 @@ export async function notifyIncompleteProfiles() {
     }
 
     const notificationsToCreate = incompleteUsers.map(user => ({
+      tenantId: user.tenantId,
       userId: user.id,
       title: "Update Your Profile",
-      content: `Hi ${user.name || user.email.split('@')[0]}, please complete your profile details (Phone, DOB, Emergency Contact) to help us keep your records up to date.`,
+      message: `Hi ${user.name || user.email.split('@')[0]}, please complete your profile details (Phone, DOB, Emergency Contact) to help us keep your records up to date.`,
       type: "WARNING" as const,
       link: "/dashboard"
     }));
@@ -383,8 +412,8 @@ export async function notifyIncompleteProfiles() {
 
 export async function triggerManualNotificationCleanup() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "SYSTEM_ADMIN")) {
-    return { success: false, error: "Unauthorized: Admin or System Admin access required" };
+  if (!session || (session.user.role !== "ADMIN")) {
+    return { success: false, error: "Unauthorized: Admin access required" };
   }
 
   try {
@@ -398,4 +427,3 @@ export async function triggerManualNotificationCleanup() {
     return { success: false, error: error.message || "Failed to execute cleanup" };
   }
 }
-

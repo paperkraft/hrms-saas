@@ -21,9 +21,13 @@ export async function developerCreateLeave(data: any) {
 
     const { userId, startDate, endDate, duration, category, leaveType, halfDayType, startTime, endTime, reason } = data;
 
+    const targetUser = await prisma.user.findUnique({ where: { id: userId }, select: { tenantId: true } });
+    if (!targetUser) throw new Error("User not found");
+
     // Direct insertion bypasses all checks (overlap, backdated logic, minimum days)
     const newRequest = await prisma.leaveRequest.create({
       data: {
+        tenantId: targetUser.tenantId,
         userId,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
@@ -173,7 +177,6 @@ export async function fetchRecentLeaves(month?: number, year?: number, limit = 2
     const leaves = await prisma.leaveRequest.findMany({
       where: {
         user: {
-          role: { not: "SYSTEM_ADMIN" },
           NOT: {
             roleDefinition: { code: "SYSTEM_ADMIN" }
           }

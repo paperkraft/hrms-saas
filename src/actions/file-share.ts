@@ -76,12 +76,14 @@ export async function syncFileShareStorage() {
       }
     };
 
+    const tenantId = session.user.tenantId!;
     // 5. Create missing records
     for (const item of missingInDb) {
       if (item.isFolder) {
         const folderName = item.name.replace(/\/$/, ""); // Remove trailing slash
         await prisma.fileShare.create({
           data: {
+            tenantId,
             uploaderId: session.user.id,
             fileName: folderName,
             storageKey: item.name, // e.g. "Project-Alpha/"
@@ -96,6 +98,7 @@ export async function syncFileShareStorage() {
         const filename = item.name;
         await prisma.fileShare.create({
           data: {
+            tenantId,
             uploaderId: session.user.id,
             fileName: filename,
             storageKey: item.name,

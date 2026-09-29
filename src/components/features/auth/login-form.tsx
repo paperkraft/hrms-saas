@@ -65,7 +65,8 @@ export function LoginForm() {
       if (session?.user?.role === "SUPER_ADMIN" || session?.user?.tenantSlug === "super-admin") {
         window.location.href = "/super-admin";
       } else {
-        window.location.href = "/dashboard";
+        const slug = session?.user?.tenantSlug || "sigma";
+        window.location.href = `/${slug}/dashboard`;
       }
       
     } catch (error) {

@@ -32,9 +32,13 @@ export async function addTodo(title: string) {
     return { success: false, error: "Title is required" }
   }
 
+  const tenantId = session.user.tenantId;
+  if (!tenantId) return { success: false, error: "No tenant configured" };
+
   try {
     const newTodo = await prisma.todo.create({
       data: {
+        tenantId,
         title: title.trim(),
         userId: session.user.id
       }

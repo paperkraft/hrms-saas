@@ -129,26 +129,22 @@ export async function getProjects() {
 export async function createProject(data: {
   name: string;
   description?: string;
-  client?: string;
-  projectCoordinateName?: string;
-  documentManagerName?: string;
-  timeLimit?: Date;
-  dateOfWorkOrder?: Date;
-  retentionStartDate?: Date;
-  retentionDurationMonths?: number;
+  code?: string;
+  startDate?: Date;
+  endDate?: Date;
+  [key: string]: any;
 }) {
   try {
     const session = await authorizeProjectManager()
 
-    let retentionEndDate: Date | undefined = undefined;
-    if (data.retentionStartDate && data.retentionDurationMonths) {
-      retentionEndDate = addMonths(new Date(data.retentionStartDate), data.retentionDurationMonths);
-    }
-
     const project = await prisma.project.create({
       data: {
-        ...data,
-        retentionEndDate,
+        tenantId: session.user.tenantId!,
+        name: data.name,
+        code: data.code || null,
+        description: data.description || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        endDate: data.endDate ? new Date(data.endDate) : null,
         status: "ACTIVE"
       }
     })
@@ -185,26 +181,17 @@ export async function updateProject(id: string, data: any) {
       }
     }
 
-    let updateData = { ...data };
-    
-    // Recalculate end date if start date or duration is provided
-    if (updateData.retentionStartDate || updateData.retentionDurationMonths) {
-      // We need to fetch the existing project to get the current values if only one is updated
-      const existingProject = await prisma.project.findUnique({ where: { id } });
-      const startDate = updateData.retentionStartDate !== undefined ? updateData.retentionStartDate : existingProject?.retentionStartDate;
-      const duration = updateData.retentionDurationMonths !== undefined ? updateData.retentionDurationMonths : existingProject?.retentionDurationMonths;
-      
-      if (startDate && duration) {
-        updateData.retentionEndDate = addMonths(new Date(startDate), duration);
-        updateData.retentionNotified = false; // Reset notification flag if retention is updated
-      } else {
-        updateData.retentionEndDate = null;
-      }
-    }
-
+    const { name, code, description, startDate, endDate, status } = data;
     const project = await prisma.project.update({
       where: { id },
-      data: updateData
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(code !== undefined ? { code } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
+        ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
+        ...(status !== undefined ? { status } : {}),
+      }
     })
 
     await logActivity({

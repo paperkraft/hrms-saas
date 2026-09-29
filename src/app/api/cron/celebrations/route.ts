@@ -36,9 +36,7 @@ export async function GET(request: Request) {
     const users = await prisma.user.findMany({
       where: {
         status: "ACTIVE",
-        role: { not: "SYSTEM_ADMIN" },
         NOT: [
-          { role: "SYSTEM_ADMIN" },
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
           { roleDefinition: { code: "SYSTEM_ADMIN" } }
         ]

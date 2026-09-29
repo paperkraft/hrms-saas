@@ -4,11 +4,16 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardRootPage() {
+export default async function DashboardRootPage({
+  params,
+}: {
+  params: Promise<{ tenant: string }>;
+}) {
+  const { tenant: tenantSlug } = await params;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
-    redirect("/login");
+    redirect(`/${tenantSlug}/login`);
   }
 
   const role = session.user.role;
@@ -19,16 +24,16 @@ export default async function DashboardRootPage() {
   }
 
   if (role === "ADMIN") {
-    redirect("/dashboard/admin");
+    redirect(`/${tenantSlug}/dashboard/admin`);
   }
 
   if (role === "ACCOUNTANT") {
-    redirect("/dashboard/accountant");
+    redirect(`/${tenantSlug}/dashboard/accountant`);
   }
 
   if (isExternal || role === "EXTERNAL_USER") {
-    redirect("/dashboard/external");
+    redirect(`/${tenantSlug}/dashboard/external`);
   }
 
-  redirect("/dashboard/employee");
+  redirect(`/${tenantSlug}/dashboard/employee`);
 }

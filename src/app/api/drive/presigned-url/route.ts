@@ -69,11 +69,10 @@ export async function GET(req: NextRequest) {
     // Storage Quota & File Size Verification
     if (driveScope === "PERSONAL") {
       const quotaCheck = await checkCanUploadToPersonalDrive(session.user.id, size);
-      if (!quotaCheck.allowed) {
+      if (!quotaCheck.canUpload) {
         return NextResponse.json(
           {
-            error: quotaCheck.error,
-            quotaInfo: quotaCheck.quotaInfo,
+            error: quotaCheck.reason,
           },
           { status: 403 }
         );

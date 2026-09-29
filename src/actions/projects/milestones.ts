@@ -6,7 +6,7 @@ import { authorizeProjectManager } from "./core"
 
 export async function createMilestone(projectId: string, data: { title: string; description?: string; dueDate?: Date }) {
   try {
-    await authorizeProjectManager()
+    const session = await authorizeProjectManager()
     const maxOrderMilestone = await prisma.milestone.findFirst({
       where: { projectId },
       orderBy: { order: 'desc' },
@@ -17,6 +17,7 @@ export async function createMilestone(projectId: string, data: { title: string; 
 
     const milestone = await prisma.milestone.create({
       data: {
+        tenantId: session.user.tenantId!,
         ...data,
         projectId,
         order: nextOrder

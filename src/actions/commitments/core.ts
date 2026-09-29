@@ -117,10 +117,16 @@ export async function getTeamWorkload(userIds: string[]) {
 
 // ── Internal snapshot helper ──────────────────────────────────────────────────
 
-export async function takeWorkloadSnapshot(userId: string) {
+export async function takeWorkloadSnapshot(userId: string, tenantId?: string) {
+  let resolvedTenantId = tenantId;
+  if (!resolvedTenantId) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { tenantId: true } });
+    resolvedTenantId = user?.tenantId;
+  }
+  if (!resolvedTenantId) return null;
   const workload = await calculateWorkload(userId)
   await prisma.workloadSnapshot.create({
-    data: { userId, ...workload }
+    data: { tenantId: resolvedTenantId, userId, ...workload }
   })
   return workload
 }

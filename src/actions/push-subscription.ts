@@ -3,12 +3,11 @@
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-
 import { revalidatePath } from "next/cache";
 
-export async function subscribeToPush(subscription: any, userAgent?: string) {
+export async function subscribeToPush(subscription: any, _userAgent?: string) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  if (!session?.user?.id || !session.user.tenantId) return { success: false, error: "Unauthorized" };
 
   try {
     const { endpoint, keys } = subscription;
@@ -21,14 +20,13 @@ export async function subscribeToPush(subscription: any, userAgent?: string) {
       update: {
         p256dh: keys.p256dh,
         auth: keys.auth,
-        userAgent: userAgent || null,
         userId: session.user.id,
       },
       create: {
+        tenantId: session.user.tenantId,
         endpoint,
         p256dh: keys.p256dh,
         auth: keys.auth,
-        userAgent: userAgent || null,
         userId: session.user.id,
       },
     });
@@ -57,6 +55,22 @@ export async function subscribeToPush(subscription: any, userAgent?: string) {
   }
 }
 
+export async function revokeDevice(id: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    await prisma.pushSubscription.deleteMany({
+      where: { id, userId: session.user.id },
+    });
+    revalidatePath("/dashboard/notifications");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to revoke device:", error);
+    return { success: false, error: "Failed to revoke device" };
+  }
+}
+
 export async function unsubscribeFromPush(endpoint: string) {
   try {
     await prisma.pushSubscription.delete({
@@ -80,7 +94,6 @@ export async function getActiveDevices() {
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
-        userAgent: true,
         createdAt: true,
       }
     });
@@ -88,24 +101,5 @@ export async function getActiveDevices() {
   } catch (error) {
     console.error("Failed to get active devices:", error);
     return { success: false, error: "Failed to get active devices" };
-  }
-}
-
-export async function revokeDevice(id: string) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
-
-  try {
-    await prisma.pushSubscription.deleteMany({
-      where: { 
-        id,
-        userId: session.user.id // ensure they only delete their own
-      },
-    });
-    revalidatePath("/dashboard/notifications");
-    return { success: true };
-  } catch (error) {
-    console.error("Failed to revoke device:", error);
-    return { success: false, error: "Failed to revoke device" };
   }
 }

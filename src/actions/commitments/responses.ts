@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { sseEmitter } from "@/lib/sse"
 import { logActivity } from "@/lib/activity-logger"
 
+import { createNotification } from "@/actions/notification"
 import { getSession, isTLorManager, takeWorkloadSnapshot, createThreadEntry } from "./core";
 /**
  * Employee responds to a proposed task.
@@ -81,14 +82,12 @@ export async function respondToTask(
 
       // Notify the proposer/creator
       if (managerUserId && managerUserId !== session.user.id) {
-        await prisma.notification.create({
-          data: {
-            userId: managerUserId,
-            title: "Task Accepted",
-            content: `${session.user.name} accepted "${task.name}"`,
-            type: "SUCCESS",
-            link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-          }
+        await createNotification({
+          userId: managerUserId,
+          title: "Task Accepted",
+          message: `${session.user.name} accepted "${task.name}"`,
+          type: "SUCCESS",
+          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
         })
         sseEmitter.emit(`notify:${managerUserId}`)
       }
@@ -120,14 +119,12 @@ export async function respondToTask(
       })
 
       if (managerUserId && managerUserId !== session.user.id) {
-        await prisma.notification.create({
-          data: {
-            userId: managerUserId,
-            title: "Workload Concern Raised",
-            content: `${session.user.name} raised a concern on "${task.name}" — "${comment.trim().substring(0, 80)}"`,
-            type: "WARNING",
-            link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-          }
+        await createNotification({
+          userId: managerUserId,
+          title: "Workload Concern Raised",
+          message: `${session.user.name} raised a concern on "${task.name}" — "${comment.trim().substring(0, 80)}"`,
+          type: "WARNING",
+          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
         })
         sseEmitter.emit(`notify:${managerUserId}`)
       }
@@ -168,14 +165,12 @@ export async function respondToTask(
       })
 
       if (managerUserId && managerUserId !== session.user.id) {
-        await prisma.notification.create({
-          data: {
-            userId: managerUserId,
-            title: "Reassignment Requested",
-            content: `${session.user.name} requested reassignment of "${task.name}" — Reason: ${reasonText}`,
-            type: "WARNING",
-            link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-          }
+        await createNotification({
+          userId: managerUserId,
+          title: "Reassignment Requested",
+          message: `${session.user.name} requested reassignment of "${task.name}" — Reason: ${reasonText}`,
+          type: "WARNING",
+          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
         })
         sseEmitter.emit(`notify:${managerUserId}`)
       }
@@ -248,14 +243,12 @@ export async function acceptNegotiation(taskId: string, comment: string) {
 
     const managerUserId = task.proposedById || task.createdById
     if (managerUserId && managerUserId !== session.user.id) {
-      await prisma.notification.create({
-        data: {
-          userId: managerUserId,
-          title: "Task Committed",
-          content: `${session.user.name} accepted and committed to "${task.name}" after discussion.`,
-          type: "SUCCESS",
-          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-        }
+      await createNotification({
+        userId: managerUserId,
+        title: "Task Committed",
+        message: `${session.user.name} accepted and committed to "${task.name}" after discussion.`,
+        type: "SUCCESS",
+        link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
       })
       sseEmitter.emit(`notify:${managerUserId}`)
     }
@@ -327,14 +320,12 @@ export async function acceptProposedDeadline(taskId: string, commentId: string) 
     })
 
     if (task.assignedToId && task.assignedToId !== session.user.id) {
-      await prisma.notification.create({
-        data: {
-          userId: task.assignedToId,
-          title: "Proposed Deadline Accepted",
-          content: `Your proposed deadline for "${task.name}" has been accepted by ${session.user.name}. The task is now officially allocated to you.`,
-          type: "SUCCESS",
-          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-        }
+      await createNotification({
+        userId: task.assignedToId,
+        title: "Proposed Deadline Accepted",
+        message: `Your proposed deadline for "${task.name}" has been accepted by ${session.user.name}. The task is now officially allocated to you.`,
+        type: "SUCCESS",
+        link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
       })
       sseEmitter.emit(`notify:${task.assignedToId}`)
     }
@@ -457,14 +448,12 @@ export async function forceCommitTask(taskId: string, reason: string) {
 
     // Notify the assignee
     if (task.assignedToId && task.assignedToId !== session.user.id) {
-      await prisma.notification.create({
-        data: {
-          userId: task.assignedToId,
-          title: "Task Force-Committed",
-          content: `${session.user.name} has committed "${task.name}" on your behalf — "${reason.trim().substring(0, 80)}"`,
-          type: "WARNING",
-          link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
-        }
+      await createNotification({
+        userId: task.assignedToId,
+        title: "Task Force-Committed",
+        message: `${session.user.name} has committed "${task.name}" on your behalf — "${reason.trim().substring(0, 80)}"`,
+        type: "WARNING",
+        link: `/dashboard/projects/${task.projectId}?taskId=${task.id}`
       })
       sseEmitter.emit(`notify:${task.assignedToId}`)
     }
