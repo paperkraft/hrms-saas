@@ -30,8 +30,11 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Missing credentials");
         }
 
-        const user = await prisma.user.findFirst({
-          where: { email: credentials.email },
+        const cleanEmail = credentials.email.toLowerCase().trim();
+        let user = await prisma.user.findFirst({
+          where: {
+            email: { equals: cleanEmail, mode: "insensitive" }
+          },
           include: {
             tenant: { select: { id: true, slug: true, name: true } },
             roleDefinition: true,
@@ -45,7 +48,41 @@ export const authOptions: NextAuthOptions = {
           }
         });
 
-        if (!user || !user.password) {
+        if (!user) {
+          // Check if this is a Platform Super Admin
+          const superAdmin = await prisma.superAdmin.findUnique({
+            where: { email: credentials.email.toLowerCase().trim() },
+          });
+
+          if (superAdmin && superAdmin.password) {
+            const isSuperValid = await bcrypt.compare(credentials.password, superAdmin.password);
+            if (isSuperValid) {
+              return {
+                id: superAdmin.id,
+                tenantId: "PLATFORM_ROOT",
+                tenantSlug: "super-admin",
+                tenantName: "HRMS SaaS Platform",
+                email: superAdmin.email,
+                name: superAdmin.name,
+                role: "SUPER_ADMIN",
+                roleId: "SUPER_ADMIN",
+                roleName: "Super Administrator",
+                departmentId: null,
+                departmentIds: [],
+                ledDepartmentId: null,
+                ledDepartmentIds: [],
+                isTeamLeader: false,
+                allowedMenus: ["all"],
+                permissions: ["all"],
+                isExternal: false,
+                isSuperAdmin: true,
+              } as any;
+            }
+          }
+          throw new Error("Invalid email or password");
+        }
+
+        if (!user.password) {
           throw new Error("Invalid email or password");
         }
 
@@ -153,6 +190,20 @@ export const authOptions: NextAuthOptions = {
       const userId = token?.id || token?.sub;
       if (userId && session.user) {
         session.user.id = userId;
+
+        if (token.role === "SUPER_ADMIN" || token.isSuperAdmin) {
+          session.user.tenantId = "PLATFORM_ROOT";
+          session.user.tenantSlug = "super-admin";
+          session.user.tenantName = "HRMS SaaS Platform";
+          session.user.role = "SUPER_ADMIN";
+          session.user.roleId = "SUPER_ADMIN";
+          session.user.roleName = "Super Administrator";
+          session.user.allowedMenus = ["all"];
+          session.user.permissions = ["all"];
+          session.user.isExternal = false;
+          return session;
+        }
+
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: userId },

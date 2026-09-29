@@ -86,6 +86,7 @@ model Tenant {
   publicHolidays        PublicHoliday[]
   leavePolicies         LeavePolicy[]
   userLeavePolicyBalances UserLeavePolicyBalance[]
+  policies              Policy[]
 
   @@index([slug])
   @@index([status])
@@ -470,6 +471,24 @@ model PublicHoliday {
   @@unique([tenantId, date])
   @@index([tenantId])
   @@index([date])
+}
+
+model Policy {
+  id           String    @id @default(cuid())
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category     String
+  title        String
+  description  String
+  content      String
+  requirements String[]  @default([])
+  lastUpdated  String?
+  order        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([order])
 }
 
 model AttendanceGrievance {

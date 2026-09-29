@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   getSuperAdminSession,
   setSuperAdminSessionCookie,
@@ -39,7 +40,8 @@ export async function loginSuperAdmin(formData: FormData) {
  */
 export async function logoutSuperAdmin() {
   await clearSuperAdminSessionCookie();
-  return { success: true, redirectUrl: "/super-admin/login" };
+  await clearImpersonationSessionCookie();
+  redirect("/super-admin/login");
 }
 
 export interface TenantOnboardingInput {

@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const SUPER_ADMIN_COOKIE = "saas_super_admin_session";
 export const IMPERSONATION_COOKIE = "saas_impersonation_session";
@@ -108,6 +110,9 @@ export async function setSuperAdminSessionCookie(session: SuperAdminSession) {
 export async function clearSuperAdminSessionCookie() {
   const cookieStore = await cookies();
   cookieStore.delete(SUPER_ADMIN_COOKIE);
+  cookieStore.delete("next-auth.session-token");
+  cookieStore.delete("__Secure-next-auth.session-token");
+  cookieStore.delete(IMPERSONATION_COOKIE);
 }
 
 /**
@@ -116,8 +121,26 @@ export async function clearSuperAdminSessionCookie() {
 export async function getSuperAdminSession(): Promise<SuperAdminSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SUPER_ADMIN_COOKIE)?.value;
-  if (!token) return null;
-  return verifySessionPayload<SuperAdminSession>(token);
+  if (token) {
+    const verified = verifySessionPayload<SuperAdminSession>(token);
+    if (verified) return verified;
+  }
+
+  // Fallback check NextAuth session for SUPER_ADMIN role
+  try {
+    const session = await getServerSession(authOptions);
+    if (session && session.user && (session.user.role === "SUPER_ADMIN" || (session.user as any).isSuperAdmin)) {
+      return {
+        id: session.user.id || "PLATFORM_ROOT",
+        email: session.user.email || "superadmin@hrms.com",
+        name: session.user.name || "Platform Super Admin",
+      };
+    }
+  } catch {
+    // NextAuth session lookup might fail in non-request contexts
+  }
+
+  return null;
 }
 
 /**

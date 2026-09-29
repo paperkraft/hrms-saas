@@ -31,8 +31,7 @@ export default function SuperAdminLoginPage() {
       const res = await loginSuperAdmin(formData);
       if (res.success) {
         toast.success("Super Administrator authenticated successfully");
-        router.push(callbackUrl);
-        router.refresh();
+        window.location.href = callbackUrl;
       } else {
         toast.error(res.error || "Authentication failed");
       }

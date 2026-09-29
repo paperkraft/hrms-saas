@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Loader2, Lock, Download, Smartphone } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
+import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { appConfig } from "@/lib/app-config";
 import {
@@ -59,8 +61,12 @@ export function LoginForm() {
         return;
       }
       
-      // If successful, let middleware redirect to the appropriate role-dashboard
-      window.location.href = "/dashboard";
+      const session = await getSession();
+      if (session?.user?.role === "SUPER_ADMIN" || session?.user?.tenantSlug === "super-admin") {
+        window.location.href = "/super-admin";
+      } else {
+        window.location.href = "/dashboard";
+      }
       
     } catch (error) {
       setAuthError("An unexpected error occurred. Please try again.");
@@ -130,6 +136,16 @@ export function LoginForm() {
           )}
         </Button>
       </form>
+
+      <div className="pt-2 text-center">
+        <Link 
+          href="/super-admin/login" 
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 px-2.5 rounded-lg hover:bg-muted/50 border border-transparent hover:border-border"
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+          <span>Platform Super Admin Portal</span>
+        </Link>
+      </div>
 
       {/* PWA Install Button (if eligible and not already standalone) */}
       {!isStandalone && (installPrompt || isIOS) && (

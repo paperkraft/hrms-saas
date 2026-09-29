@@ -161,7 +161,15 @@ export async function getAdminDashboardStats(reqDate?: string) {
     getUpcomingHolidays(10),
     getAllAnnouncementsForAdmin(),
     getNotifications(20),
-    prisma.policy.findMany({ take: 5, orderBy: { order: 'asc' } }),
+    prisma.policy.findMany({
+      where: session.user.tenantId
+        ? {
+            OR: [{ tenantId: session.user.tenantId }, { tenantId: null }],
+          }
+        : undefined,
+      take: 5,
+      orderBy: { order: "asc" },
+    }),
     prisma.user.findMany({
       where: {
         status: "ACTIVE",
