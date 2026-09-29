@@ -14,6 +14,7 @@ export const leaveApplicationSchema = z.object({
   startTime: z.string().optional(),
   endTime: z.string().optional(),
   halfDayType: z.enum(["FIRST_HALF", "SECOND_HALF"]).optional().nullable(),
+  explicitNotifyEmails: z.array(z.string().email("Invalid email address")).optional().nullable(),
 }).refine((data) => {
   // Requirement: Monthly leaves need a type (Casual or Medical)
   if (data.category === "MONTHLY_POLICY_1" && !data.leaveType) return false;

@@ -30,36 +30,32 @@ export async function getCyclePendingDays(userId: string, cycleStart: Date, cycl
   return pendingRequests.reduce((acc, req) => acc + getDaysDifference(req.startDate, req.endDate, holidayDates), 0);
 }
 
-export async function ensureBalance(userId: string, month: number, year: number, configStartMonth?: number): Promise<any> {
-  const existing = await prisma.leaveBalance.findUnique({
-    where: { userId_month_year: { userId, month, year } }
+export async function ensureBalance(userId: string, month: number, year: number, configStartMonth?: number, userTenantId?: string): Promise<any> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tenantId: true, joiningDate: true }
   });
-  if (existing) return existing;
+  const tenantId = userTenantId || user?.tenantId || "";
+
+  if (tenantId) {
+    const existing = await prisma.leaveBalance.findUnique({
+      where: { tenantId_userId_month_year: { tenantId, userId, month, year } }
+    });
+    if (existing) return existing;
+  } else {
+    const existing = await prisma.leaveBalance.findFirst({
+      where: { userId, month, year }
+    });
+    if (existing) return existing;
+  }
 
   let startMonth = configStartMonth;
   if (startMonth === undefined) {
-    const config = await prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } });
+    const config = await prisma.systemConfig.findFirst({
+      where: tenantId ? { tenantId } : undefined
+    });
     startMonth = config?.semiAnnualCycleStartMonth ?? 0;
   }
-
-  // Find the predecessor
-  const lastRecord = await prisma.leaveBalance.findFirst({
-    where: {
-      userId,
-      OR: [
-        { year: { lt: year } },
-        { AND: [{ year: year }, { month: { lt: month } }] }
-      ]
-    },
-    orderBy: [{ year: 'desc' }, { month: 'desc' }]
-  });
-
-  let carryForwardToNew = 0.0;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { joiningDate: true }
-  });
 
   let isProbation = false;
   if (user?.joiningDate) {
@@ -71,7 +67,20 @@ export async function ensureBalance(userId: string, month: number, year: number,
     }
   }
 
+  let carryForwardToNew = 0.0;
   let semiAnnualToNew = isProbation ? 0.0 : SICK_ACCRUAL_SEMI;
+
+  const lastRecord = await prisma.leaveBalance.findFirst({
+    where: {
+      userId,
+      ...(tenantId ? { tenantId } : {}),
+      OR: [
+        { year: { lt: year } },
+        { year, month: { lt: month } }
+      ]
+    },
+    orderBy: [{ year: "desc" }, { month: "desc" }]
+  });
 
   if (lastRecord) {
     const isConsecutive = (lastRecord.year === year && lastRecord.month === month - 1) ||
@@ -122,6 +131,7 @@ export async function ensureBalance(userId: string, month: number, year: number,
   try {
     return await prisma.leaveBalance.create({
       data: {
+        tenantId,
         userId, month, year,
         remainingFull: Math.min(MAX_TOTAL_CASUAL, round(CASUAL_ACCRUAL + (isProbation ? 0.0 : carryForwardToNew))),
         remainingShort: 1,
@@ -135,8 +145,13 @@ export async function ensureBalance(userId: string, month: number, year: number,
       }
     });
   } catch (e) {
-    return await prisma.leaveBalance.findUniqueOrThrow({
-      where: { userId_month_year: { userId, month, year } }
+    if (tenantId) {
+      return await prisma.leaveBalance.findUniqueOrThrow({
+        where: { tenantId_userId_month_year: { tenantId, userId, month, year } }
+      });
+    }
+    return await prisma.leaveBalance.findFirstOrThrow({
+      where: { userId, month, year }
     });
   }
 }

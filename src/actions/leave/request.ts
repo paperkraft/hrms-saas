@@ -32,7 +32,9 @@ export async function submitLeaveRequest(formData: unknown) {
   const year = startDate.getFullYear();
 
   try {
-    const config = await prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } });
+    const config = await prisma.systemConfig.findFirst({
+      where: session.user.tenantId ? { tenantId: session.user.tenantId } : undefined,
+    });
 
     // Policy Toggle: Semi-Annual
     if (data.category === "SEMI_ANNUAL_POLICY_2" && !config?.semiAnnualPolicyEnabled) {
@@ -53,27 +55,49 @@ export async function submitLeaveRequest(formData: unknown) {
     const diffDays = getDaysDifference(startDate, endDate, holidayDates);
     const balance = await ensureBalance(userId, month, year, config?.semiAnnualCycleStartMonth);
 
-    // Policy 2 Enforcement
-    if (data.category === "SEMI_ANNUAL_POLICY_2") {
-      const user = await prisma.user.findUnique({ where: { id: userId }, select: { joiningDate: true } });
-      if (user?.joiningDate) {
-        const probationEndDate = new Date(user.joiningDate);
-        probationEndDate.setDate(probationEndDate.getDate() + 90);
-        if (startDate < probationEndDate) {
-          return {
-            success: false as const,
-            error: "Employees in 90-day probation period are not eligible for Policy 2 (Semi-Annual Medical) leaves."
-          };
+    // --- DYNAMIC TENANT LEAVE POLICY EVALUATION ---
+    const tenantId = session.user.tenantId;
+    const policy = tenantId
+      ? await prisma.leavePolicy.findFirst({
+          where: { tenantId, code: data.category, isActive: true },
+        })
+      : null;
+
+    if (policy) {
+      // Dynamic Probation Enforcement
+      if (policy.probationRestricted) {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { joiningDate: true } });
+        if (user?.joiningDate) {
+          const probationEndDate = new Date(user.joiningDate);
+          probationEndDate.setDate(probationEndDate.getDate() + (policy.probationDays || 90));
+          if (startDate < probationEndDate) {
+            return {
+              success: false as const,
+              error: `Employees in ${policy.probationDays}-day probation period are not eligible for ${policy.name}.`
+            };
+          }
         }
       }
 
-      if (diffDays < 3) {
+      // Dynamic Consecutive Days Enforcement
+      if (policy.minConsecutiveDays > 1 && diffDays < policy.minConsecutiveDays) {
         return {
           success: false as const,
-          error: "Earned Leave (Policy 2) requires a minimum of 3 consecutive working leave days."
+          error: `${policy.name} requires a minimum of ${policy.minConsecutiveDays} consecutive working leave days.`
         };
       }
 
+      // Dynamic Half-Day / Short-Leave Permission
+      if (data.duration === "HALF" && !policy.allowHalfDay) {
+        return { success: false as const, error: `Half-day leaves are not permitted under ${policy.name}.` };
+      }
+      if (data.duration === "SHORT" && !policy.allowShortLeave) {
+        return { success: false as const, error: `Short leaves are not permitted under ${policy.name}.` };
+      }
+    }
+
+    // Policy 2 Quota Enforcement
+    if (data.category === "SEMI_ANNUAL_POLICY_2") {
       const cycle = getCycleRange(month, year, config?.semiAnnualCycleStartMonth);
       const pendingDays = await getCyclePendingDays(userId, cycle.start, cycle.end);
       const available = balance.semiAnnualRemaining - pendingDays;
@@ -102,7 +126,7 @@ export async function submitLeaveRequest(formData: unknown) {
       return { success: false as const, error: "You already have a leave request for the selected dates." };
     }
 
-    // --- BUSINESS LOGIC: CATEGORY CONVERSION & AUTO-APPROVAL ---
+    // --- BUSINESS LOGIC: AUTO-APPROVAL & APPROVAL NOTES ---
     let effectiveCategory = data.category;
 
     const start = new Date(data.startDate);
@@ -118,8 +142,18 @@ export async function submitLeaveRequest(formData: unknown) {
     let isAutoApproved = false;
     let approvalNote = "";
 
-    if (data.category === "SEMI_ANNUAL_POLICY_2") {
-      // Semi-annual (Earned Leave): approved if applied 7+ days in advance, else admin approval required
+    if (policy && policy.minNoticeDaysForAutoApproval > 0) {
+      if (daysInAdvance >= policy.minNoticeDaysForAutoApproval) {
+        isAutoApproved = true;
+        approvalNote = `${policy.name}: Approved (Applied >= ${policy.minNoticeDaysForAutoApproval} days in advance).`;
+      } else {
+        isAutoApproved = false;
+        approvalNote = `${policy.name}: Pending Admin review (Applied with < ${policy.minNoticeDaysForAutoApproval} days notice).`;
+      }
+    } else if (policy && !policy.requiresApproval) {
+      isAutoApproved = true;
+      approvalNote = `${policy.name}: Approved (No approval required).`;
+    } else if (data.category === "SEMI_ANNUAL_POLICY_2") {
       if (daysInAdvance >= 7) {
         isAutoApproved = true;
         approvalNote = "Semi-Annual Leave (Policy 2): Approved (Applied >= 7 days in advance).";
@@ -130,12 +164,10 @@ export async function submitLeaveRequest(formData: unknown) {
     } else {
       // Monthly Policy 1 or Unpaid
       if (daysInAdvance > 0) {
-        // Strictly future-dated (1+ days in advance): approved
         isAutoApproved = true;
         const typeLabel = data.category === "UNPAID" ? "Unpaid" : (data?.leaveType?.toLowerCase() || "standard");
         approvalNote = `Future ${typeLabel} leave: Approved.`;
       } else {
-        // Same-day or backdated: Admin approval required
         isAutoApproved = false;
         const timingLabel = isSameDay ? "Same-day" : "Backdated";
         const typeLabel = data.category === "UNPAID" ? "Unpaid" : (data?.leaveType?.toLowerCase() || "standard");
@@ -149,14 +181,28 @@ export async function submitLeaveRequest(formData: unknown) {
       finalLeaveType = null as any;
     }
 
+    const applicant = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { tenantId: true, name: true, managerId: true, email: true, departmentId: true }
+    });
+    const applicantName = applicant?.name || "An employee";
+    const applicantEmail = applicant?.email;
+    const effectiveTenantId = applicant?.tenantId || session.user.tenantId;
+
+    if (!effectiveTenantId) {
+      return { success: false as const, error: "Tenant context not found. Please log in again." };
+    }
+
     const newRequest = await prisma.leaveRequest.create({
       data: {
+        tenantId: effectiveTenantId,
+        policyId: policy?.id || null,
         userId,
         startDate: new Date(data.startDate),
         endDate: new Date(data.endDate),
         duration: data.duration,
-        category: effectiveCategory as any,
-        leaveType: finalLeaveType as any,
+        category: effectiveCategory,
+        leaveType: finalLeaveType || null,
         reason: data.reason,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -167,12 +213,6 @@ export async function submitLeaveRequest(formData: unknown) {
 
     // Trigger notifications to Admin, Accountant, Reporting Manager, and Team Leader
     try {
-      const applicant = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { tenantId: true, name: true, managerId: true, email: true, departmentId: true }
-      });
-      const applicantName = applicant?.name || "An employee";
-      const applicantEmail = applicant?.email;
 
       let teamLeaderId: string | undefined;
       let teamLeaderEmail: string | undefined;
@@ -189,39 +229,72 @@ export async function submitLeaveRequest(formData: unknown) {
 
       const usersToNotify = await prisma.user.findMany({
         where: {
+          tenantId: applicant?.tenantId,
+          status: "ACTIVE",
           AND: [
             { id: { not: userId } },
             {
               OR: [
-                { role: { in: ["ADMIN", "SYSTEM_ADMIN", "ACCOUNTANT"] } },
+                { role: "ADMIN" },
+                { roleDefinition: { code: { in: ["ADMIN", "HR", "ACCOUNTANT"] } } },
                 { id: applicant?.managerId || undefined },
                 { id: teamLeaderId || undefined }
               ]
             }
           ]
         },
-        select: { id: true, role: true, email: true }
+        select: {
+          id: true,
+          tenantId: true,
+          role: true,
+          email: true,
+          roleDefinition: { select: { code: true } }
+        }
       });
 
-      const managerEmail = usersToNotify
-        .find(u => u.id === applicant?.managerId)
-        ?.email;
+      // 1. Resolve role-based recipient emails according to tenant SystemConfig settings
+      const notifyAdmins = config?.leaveNotifyAdmins ?? true;
+      const notifyHr = config?.leaveNotifyHr ?? true;
+      const notifyManager = config?.leaveNotifyManager ?? true;
+      const notifyTeamLeader = config?.leaveNotifyTeamLeader ?? true;
 
-      const tlEmail = usersToNotify
-        .find(u => u.id === teamLeaderId)
-        ?.email || teamLeaderEmail;
+      const tenantAdminEmails = notifyAdmins
+        ? usersToNotify
+            .filter(u => u.role === "ADMIN" || u.roleDefinition?.code === "ADMIN")
+            .map(u => u.email)
+            .filter(Boolean)
+        : [];
 
-      const accountantEmails = usersToNotify
-        .filter(u => u.role === "ACCOUNTANT")
-        .map(u => u.email)
-        .filter(Boolean);
+      const managerEmail = notifyManager
+        ? usersToNotify.find(u => u.id === applicant?.managerId)?.email
+        : undefined;
 
+      const tlEmail = notifyTeamLeader
+        ? (usersToNotify.find(u => u.id === teamLeaderId)?.email || teamLeaderEmail)
+        : undefined;
+
+      const accountantHrEmails = notifyHr
+        ? usersToNotify
+            .filter(u => ["ACCOUNTANT", "HR"].includes(u.roleDefinition?.code || ""))
+            .map(u => u.email)
+            .filter(Boolean)
+        : [];
+
+      // 2. Resolve custom configured emails (from SystemConfig & LeavePolicy)
+      const tenantCustomEmails = config?.leaveCustomNotificationEmails || [];
+      const policyCustomEmails = policy?.customNotificationEmails || [];
+      const explicitHandoverEmails = data.explicitNotifyEmails || [];
+
+      // Collect all authorized and configured recipients (excluding the applicant)
       const recipientEmails = Array.from(new Set([
-        process.env.ADMIN_EMAIL, 
-        managerEmail, 
+        ...tenantAdminEmails,
+        managerEmail,
         tlEmail,
-        ...accountantEmails
-      ].filter(email => email && email !== applicantEmail) as string[]));
+        ...accountantHrEmails,
+        ...tenantCustomEmails,
+        ...policyCustomEmails,
+        ...explicitHandoverEmails,
+      ].filter(email => email && typeof email === "string" && email.trim().length > 0 && email.toLowerCase() !== applicantEmail?.toLowerCase()) as string[]));
 
       if (usersToNotify.length > 0) {
         const startStr = new Date(data.startDate).toLocaleDateString();
@@ -257,10 +330,11 @@ export async function submitLeaveRequest(formData: unknown) {
 
         await prisma.notification.createMany({
           data: usersToNotify.map(u => {
+            const code = u.roleDefinition?.code || u.role;
             let link = "/dashboard";
-            if (["ADMIN", "SYSTEM_ADMIN"].includes(u.role)) {
+            if (["ADMIN", "SYSTEM_ADMIN"].includes(code)) {
               link = "/dashboard/leaves/manage";
-            } else if (u.role === "ACCOUNTANT") {
+            } else if (["ACCOUNTANT", "HR"].includes(code)) {
               link = "/dashboard/accountant?tab=approvals";
             }
             
@@ -363,8 +437,12 @@ export async function cancelApprovedLeave(requestId: string, note?: string) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return { success: false as const, error: "Login required." };
 
-  const { role } = session.user as any;
-  const isAdminOrAccountant = ["ADMIN", "SYSTEM_ADMIN", "ACCOUNTANT"].includes(role);
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true, roleDefinition: { select: { code: true } } }
+  });
+  const userRoleCode = currentUser?.roleDefinition?.code || currentUser?.role || (session.user as any).role;
+  const isAdminOrAccountant = ["ADMIN", "SYSTEM_ADMIN", "ACCOUNTANT", "HR"].includes(userRoleCode);
 
   if (!isAdminOrAccountant) {
     return { success: false, error: "Unauthorized. Only Accountants or Admins can cancel approved leaves." };
@@ -393,7 +471,14 @@ export async function cancelApprovedLeave(requestId: string, note?: string) {
 
       for (const part of monthParts) {
         const balance = await tx.leaveBalance.findUnique({
-          where: { userId_month_year: { userId: request.userId, month: part.month, year: part.year } }
+          where: {
+            tenantId_userId_month_year: {
+              tenantId: request.tenantId,
+              userId: request.userId,
+              month: part.month,
+              year: part.year,
+            },
+          },
         });
 
         if (!balance) continue;
@@ -468,6 +553,7 @@ export async function cancelApprovedLeave(requestId: string, note?: string) {
       if (startRevertDate <= request.endDate) {
         await tx.attendance.updateMany({
           where: {
+            tenantId: request.tenantId,
             userId: request.userId,
             date: { gte: startRevertDate, lte: request.endDate },
             isAutoPunchOut: true
@@ -479,7 +565,9 @@ export async function cancelApprovedLeave(requestId: string, note?: string) {
         });
       }
 
-      const config = await tx.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } });
+      const config = await tx.systemConfig.findFirst({
+        where: { tenantId: request.tenantId },
+      });
       const startMonthConfig = (config as any)?.semiAnnualCycleStartMonth ?? 0;
 
       // Final Step: Cascade updates throughout the rest of the year
@@ -488,7 +576,14 @@ export async function cancelApprovedLeave(requestId: string, note?: string) {
 
       while (true) {
         const current = await tx.leaveBalance.findUnique({
-          where: { userId_month_year: { userId: request.userId, month: m, year: y } }
+          where: {
+            tenantId_userId_month_year: {
+              tenantId: request.tenantId,
+              userId: request.userId,
+              month: m,
+              year: y,
+            },
+          },
         });
         if (!current) break;
 
@@ -500,7 +595,14 @@ export async function cancelApprovedLeave(requestId: string, note?: string) {
         }
 
         const next = await tx.leaveBalance.findUnique({
-          where: { userId_month_year: { userId: request.userId, month: nextM, year: nextY } }
+          where: {
+            tenantId_userId_month_year: {
+              tenantId: request.tenantId,
+              userId: request.userId,
+              month: nextM,
+              year: nextY,
+            },
+          },
         });
         if (!next) break;
 
@@ -618,8 +720,10 @@ export async function getEmployeeLeaveBalance(targetMonth?: number, targetYear?:
   const year = targetYear || now.getFullYear();
 
   try {
-    const config = await prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } });
-    const balance = await ensureBalance(session.user.id, month, year, config?.semiAnnualCycleStartMonth);
+    const config = await prisma.systemConfig.findFirst({
+      where: session.user.tenantId ? { tenantId: session.user.tenantId } : undefined,
+    });
+    const balance = await ensureBalance(session.user.id, month, year, config?.semiAnnualCycleStartMonth, session.user.tenantId);
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },

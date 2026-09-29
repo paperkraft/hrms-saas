@@ -83,6 +83,9 @@ model Tenant {
   todos                 Todo[]
   workloadSnapshots     WorkloadSnapshot[]
   attendanceGrievances  AttendanceGrievance[]
+  publicHolidays        PublicHoliday[]
+  leavePolicies         LeavePolicy[]
+  userLeavePolicyBalances UserLeavePolicyBalance[]
 
   @@index([slug])
   @@index([status])
@@ -177,6 +180,7 @@ model User {
   drivePermissions         DriveItemPermission[]
   driveVersions            DriveVersion[]
   driveActivities          DriveActivity[]
+  userLeavePolicyBalances  UserLeavePolicyBalance[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -321,9 +325,12 @@ model LeaveRequest {
   halfDayType String?
   systemNote  String?
   leaveType   LeaveType?
+  policyId    String?
+  policy      LeavePolicy?  @relation(fields: [policyId], references: [id])
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([policyId])
   @@index([userId, status])
   @@index([startDate, endDate, status])
 }
@@ -350,6 +357,65 @@ model LeaveBalance {
 
   @@unique([tenantId, userId, month, year])
   @@index([tenantId])
+}
+
+model LeavePolicy {
+  id                         String           @id @default(cuid())
+  tenantId                   String
+  tenant                     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                       String           // e.g. "Casual Leave", "Sick Leave", "Earned Leave"
+  code                       String           // e.g. "CASUAL", "SICK", "EARNED", "MATERNITY", "UNPAID"
+  description                String?
+  color                      String?          @default("#3b82f6") // Badge color hex
+  icon                       String?          @default("calendar")
+  accrualType                LeaveAccrualType @default(MONTHLY_ACCRUAL)
+  accrualRate                Float            @default(1.0) // Per accrual unit (e.g. 1.0 or 2.0 / month)
+  maxAnnualQuota             Float            @default(12.0)
+  maxCarryForward            Float            @default(0.0)
+  allowEncashment            Boolean          @default(false)
+  allowHalfDay               Boolean          @default(true)
+  allowShortLeave            Boolean          @default(false)
+  probationRestricted        Boolean          @default(false) // Locked during probation period
+  probationDays              Int              @default(90)
+  minNoticeDaysForAutoApproval Int            @default(0) // 0 = standard approval workflow
+  requiresApproval           Boolean          @default(true)
+  minConsecutiveDays         Int              @default(1)
+  maxConsecutiveDays         Int?
+  sandwichRuleEnabled        Boolean          @default(false)
+  customNotificationEmails   String[]         @default([]) // Custom email recipients specifically for this policy
+  isActive                   Boolean          @default(true)
+  sortOrder                  Int              @default(0)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+
+  leaveRequests              LeaveRequest[]
+  userBalances               UserLeavePolicyBalance[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model UserLeavePolicyBalance {
+  id             String      @id @default(cuid())
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policyId       String
+  policy         LeavePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  year           Int
+  credited       Float       @default(0.0)
+  used           Float       @default(0.0)
+  pending        Float       @default(0.0)
+  carriedOver    Float       @default(0.0)
+  encashed       Float       @default(0.0)
+  balance        Float       @default(0.0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([tenantId, userId, policyId, year])
+  @@index([tenantId])
+  @@index([userId, year])
 }
 
 model SystemConfig {
@@ -381,6 +447,29 @@ model SystemConfig {
   maxGeofenceToleranceRadius   Int      @default(50)
   enableOvertimeModule         Boolean  @default(true)
   enableGrievanceModule        Boolean  @default(true)
+
+  // Leave Email Notification Routing Configuration
+  leaveNotifyAdmins            Boolean  @default(true) // Default: notify tenant admins
+  leaveNotifyHr                Boolean  @default(true) // Default: notify HR / Accountants
+  leaveNotifyManager           Boolean  @default(true) // Default: notify Reporting Manager
+  leaveNotifyTeamLeader        Boolean  @default(true) // Default: notify Team Leader
+  leaveCustomNotificationEmails String[] @default([]) // Custom email recipients configured at tenant level
+}
+
+model PublicHoliday {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  date        DateTime @db.Date
+  description String?
+  isOptional  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@index([date])
 }
 
 model AttendanceGrievance {
@@ -1007,13 +1096,25 @@ enum EmploymentStatus {
   INACTIVE
 }
 
+enum LeaveAccrualType {
+  MONTHLY_ACCRUAL
+  ANNUAL_UPFRONT
+  SEMI_ANNUAL_CYCLE
+  ON_DEMAND
+}
+
 enum LeaveDuration {
+  FULL
+  HALF
+  SHORT
   FULL_DAY
   HALF_DAY
   SHORT_LEAVE
 }
 
 enum LeaveCategory {
+  MONTHLY_POLICY_1
+  SEMI_ANNUAL_POLICY_2
   PAID
   UNPAID
 }
