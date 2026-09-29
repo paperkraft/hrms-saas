@@ -26,14 +26,13 @@ export function ImpersonateQuickButton({
       const res = await startImpersonation(tenantId, targetUserId);
       if (res.success && res.redirectUrl) {
         toast.success(`Support impersonation started for workspace /${tenantSlug}`);
-        router.push(res.redirectUrl);
-        router.refresh();
+        window.location.href = res.redirectUrl;
       } else {
         toast.error(res.error || "Failed to start impersonation");
+        setLoading(false);
       }
     } catch (err: any) {
       toast.error(err.message || "Impersonation failed");
-    } finally {
       setLoading(false);
     }
   };

@@ -15,6 +15,28 @@ export interface ImpersonationData {
   startedAt?: string;
 }
 
+function safeDecodeBase64Url(str: string): ImpersonationData | null {
+  try {
+    let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const jsonStr = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonStr);
+  } catch {
+    try {
+      return JSON.parse(atob(str.replace(/-/g, "+").replace(/_/g, "/")));
+    } catch {
+      return null;
+    }
+  }
+}
+
 export function ImpersonationBanner() {
   const router = useRouter();
   const [impersonation, setImpersonation] = useState<ImpersonationData | null>(null);
@@ -32,7 +54,7 @@ export function ImpersonationBanner() {
         try {
           const raw = match.split("=")[1];
           const [payload] = raw.split(".");
-          const parsed = JSON.parse(atob(payload));
+          const parsed = safeDecodeBase64Url(payload);
           setImpersonation(parsed);
         } catch {
           setImpersonation(null);
@@ -43,7 +65,7 @@ export function ImpersonationBanner() {
     }
 
     checkCookie();
-    const interval = setInterval(checkCookie, 5000);
+    const interval = setInterval(checkCookie, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -68,12 +90,10 @@ export function ImpersonationBanner() {
       const res = await stopImpersonation();
       if (res.success) {
         toast.success("Support impersonation session ended");
-        router.push(res.redirectUrl || "/super-admin/tenants");
-        router.refresh();
+        window.location.href = res.redirectUrl || "/super-admin/tenants";
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to exit impersonation");
-    } finally {
       setLoading(false);
     }
   };

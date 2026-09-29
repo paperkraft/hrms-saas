@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { encode } from "next-auth/jwt";
 import {
   getSuperAdminSession,
   setSuperAdminSessionCookie,
@@ -607,7 +609,25 @@ export async function startImpersonation(tenantId: string, targetUserId?: string
     where: { id: tenantId },
     include: {
       users: {
-        where: targetUserId ? { id: targetUserId } : { role: "ADMIN" },
+        where: targetUserId
+          ? { id: targetUserId }
+          : {
+              OR: [
+                { role: "ADMIN" },
+                { roleDefinition: { code: "ADMIN" } },
+                { role: "SUPER_ADMIN" },
+              ],
+            },
+        include: {
+          roleDefinition: true,
+          departments: {
+            include: {
+              department: {
+                select: { id: true, name: true, parentDepartmentId: true },
+              },
+            },
+          },
+        },
         take: 1,
       },
     },
@@ -617,9 +637,140 @@ export async function startImpersonation(tenantId: string, targetUserId?: string
     return { success: false, error: "Tenant not found" };
   }
 
-  const targetUser = tenant.users[0];
+  let targetUser = tenant.users[0];
+  if (!targetUser) {
+    targetUser = (await prisma.user.findFirst({
+      where: { tenantId: tenant.id },
+      include: {
+        roleDefinition: true,
+        departments: {
+          include: {
+            department: {
+              select: { id: true, name: true, parentDepartmentId: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    })) as any;
+  }
+
   if (!targetUser) {
     return { success: false, error: "No target user found for impersonation in this tenant." };
+  }
+
+  // Gather departments & subordinates
+  const targetUserDepts = targetUser.departments || [];
+  const [teamLeaderDepts, subordinate] = await Promise.all([
+    prisma.department.findMany({
+      where: {
+        OR: [
+          { teamLeaderId: targetUser.id },
+          { id: { in: targetUserDepts.filter((d: any) => d.isLeader).map((d: any) => d.departmentId) } },
+        ],
+      },
+      select: { id: true, parentDepartmentId: true, subDepartments: { select: { id: true } } },
+    }),
+    prisma.user.findFirst({
+      where: { managerId: targetUser.id },
+      select: { id: true },
+    }),
+  ]);
+
+  const ledDepartmentIds = Array.from(
+    new Set(teamLeaderDepts.flatMap((dept) => [dept.id, ...dept.subDepartments.map((d) => d.id)]))
+  );
+  const primaryLedDept = teamLeaderDepts[0];
+
+  const roleIds = (targetUser.assignedRoleIds && targetUser.assignedRoleIds.length > 0)
+    ? targetUser.assignedRoleIds
+    : (targetUser.roleDefinitionId ? [targetUser.roleDefinitionId] : []);
+
+  let assignedRoleDefs: any[] = [];
+  if (roleIds.length > 0) {
+    assignedRoleDefs = await prisma.roleDefinition.findMany({
+      where: { id: { in: roleIds } },
+      select: { allowedMenus: true, permissions: true, code: true, name: true, isExternal: true },
+    });
+  }
+
+  const combinedMenus = assignedRoleDefs.length > 0
+    ? Array.from(new Set(assignedRoleDefs.flatMap((r) => r.allowedMenus || [])))
+    : Array.from(
+        new Set([
+          ...(targetUser.roleDefinition?.allowedMenus || []),
+          ...((targetUser as any).allowedMenus || []),
+        ])
+      );
+
+  const combinedPermissions = assignedRoleDefs.length > 0
+    ? Array.from(new Set(assignedRoleDefs.flatMap((r) => r.permissions || [])))
+    : targetUser.roleDefinition?.permissions || [];
+
+  const departmentIds = targetUserDepts.length > 0
+    ? targetUserDepts.map((d: any) => d.departmentId)
+    : targetUser.departmentId ? [targetUser.departmentId] : [];
+
+  const primaryDept =
+    targetUserDepts.find((d: any) => d.isPrimary)?.departmentId ||
+    targetUser.departmentId ||
+    primaryLedDept?.id ||
+    null;
+
+  const effectiveRole = targetUser.roleDefinition?.code || targetUser.role;
+  const isExternal =
+    targetUser.isExternal ||
+    targetUser.roleDefinition?.isExternal ||
+    assignedRoleDefs.some((r) => r.isExternal);
+
+  // Encode NextAuth JWT token
+  const secret = process.env.NEXTAUTH_SECRET || "super-admin-hrms-platform-secret-key-2026";
+  const tokenPayload = {
+    id: targetUser.id,
+    sub: targetUser.id,
+    tenantId: tenant.id,
+    tenantSlug: tenant.slug,
+    tenantName: tenant.name,
+    email: targetUser.email,
+    name: targetUser.name,
+    role: effectiveRole,
+    roleId: targetUser.roleDefinitionId,
+    roleName: targetUser.roleDefinition?.name,
+    departmentId: primaryDept,
+    departmentIds,
+    ledDepartmentId: primaryLedDept?.id || null,
+    ledDepartmentIds,
+    isTeamLeader: teamLeaderDepts.length > 0 || !!subordinate,
+    allowedMenus: combinedMenus,
+    permissions: combinedPermissions,
+    isExternal,
+  };
+
+  const nextAuthToken = await encode({
+    token: tokenPayload,
+    secret,
+    maxAge: 4 * 60 * 60, // 4 hours
+  });
+
+  const cookieStore = await cookies();
+  const isSecure = process.env.NODE_ENV === "production";
+
+  cookieStore.set("next-auth.session-token", nextAuthToken, {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 4 * 60 * 60,
+  });
+
+  if (isSecure) {
+    cookieStore.set("__Secure-next-auth.session-token", nextAuthToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 4 * 60 * 60,
+    });
   }
 
   // Set Impersonation Cookie
@@ -636,18 +787,22 @@ export async function startImpersonation(tenantId: string, targetUserId?: string
   });
 
   // Audit Log Impersonation Event
-  await prisma.activityLog.create({
-    data: {
-      tenantId: tenant.id,
-      userId: targetUser.id,
-      action: "SUPPORT_IMPERSONATION_STARTED",
-      details: `Super Admin ${superAdmin.email} initiated support impersonation session for user ${targetUser.email} (${tenant.name}).`,
-    },
-  });
+  try {
+    await prisma.activityLog.create({
+      data: {
+        tenantId: tenant.id,
+        userId: targetUser.id,
+        action: "SUPPORT_IMPERSONATION_STARTED",
+        details: `Super Admin ${superAdmin.email} initiated support impersonation session for user ${targetUser.email} (${tenant.name}).`,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to log activity:", e);
+  }
 
   return {
     success: true,
-    redirectUrl: `/${tenant.slug}/dashboard/admin`,
+    redirectUrl: `/${tenant.slug}/dashboard`,
     tenantSlug: tenant.slug,
   };
 }
@@ -658,16 +813,23 @@ export async function startImpersonation(tenantId: string, targetUserId?: string
 export async function stopImpersonation() {
   const session = await getImpersonationSession();
   if (session) {
-    await prisma.activityLog.create({
-      data: {
-        tenantId: session.tenantId,
-        userId: session.targetUserId || session.superAdminId,
-        action: "SUPPORT_IMPERSONATION_ENDED",
-        details: `Super Admin ${session.superAdminEmail} ended support impersonation session for ${session.tenantName}.`,
-      },
-    });
+    try {
+      await prisma.activityLog.create({
+        data: {
+          tenantId: session.tenantId,
+          userId: session.targetUserId || session.superAdminId,
+          action: "SUPPORT_IMPERSONATION_ENDED",
+          details: `Super Admin ${session.superAdminEmail} ended support impersonation session for ${session.tenantName}.`,
+        },
+      });
+    } catch (e) {
+      console.error("Failed to log activity:", e);
+    }
   }
 
+  const cookieStore = await cookies();
+  cookieStore.delete("next-auth.session-token");
+  cookieStore.delete("__Secure-next-auth.session-token");
   await clearImpersonationSessionCookie();
   return { success: true, redirectUrl: "/super-admin/tenants" };
 }
