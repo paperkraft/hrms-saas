@@ -6,12 +6,22 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import { appConfig } from "@/lib/app-config";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ ws_not_found?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : undefined;
   const session = await getServerSession(authOptions);
 
   if (session) {
     redirect("/dashboard");
   }
+
+  const invalidWorkspace =
+    typeof resolvedParams?.ws_not_found === "string" && resolvedParams.ws_not_found.trim().length > 0
+      ? resolvedParams.ws_not_found.trim()
+      : undefined;
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-background">
@@ -66,7 +76,7 @@ export default async function LoginPage() {
           />
         </div>
 
-        <LoginForm />
+        <LoginForm invalidWorkspace={invalidWorkspace} />
       </div>
 
     </div>

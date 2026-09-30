@@ -7,10 +7,8 @@ import { loginSchema, type LoginValues } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Loader2, Lock, Download, Smartphone, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, AlertTriangle, Loader2, Lock, Download, Smartphone, Eye, EyeOff } from "lucide-react";
 import { signIn, getSession } from "next-auth/react";
-import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { appConfig } from "@/lib/app-config";
 import {
@@ -24,9 +22,10 @@ import {
 
 interface LoginFormProps {
   tenantSlug?: string;
+  invalidWorkspace?: string;
 }
 
-export function LoginForm({ tenantSlug }: LoginFormProps = {}) {
+export function LoginForm({ tenantSlug, invalidWorkspace }: LoginFormProps = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -97,6 +96,20 @@ export function LoginForm({ tenantSlug }: LoginFormProps = {}) {
           </p>
         </div>
 
+        {invalidWorkspace && (
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-950 dark:text-amber-200 text-xs p-3.5 rounded-lg flex items-start gap-2.5 shadow-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-left">
+              <p className="font-semibold text-xs text-amber-700 dark:text-amber-300">
+                Workspace &quot;{invalidWorkspace}&quot; not found
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                Please sign in with your work email below. You will be routed to your assigned organization automatically.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Work Email</Label>
@@ -163,16 +176,6 @@ export function LoginForm({ tenantSlug }: LoginFormProps = {}) {
           )}
         </Button>
       </form>
-
-      <div className="pt-2 text-center">
-        <Link 
-          href="/super-admin/login" 
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1 px-2.5 rounded-lg hover:bg-muted/50 border border-transparent hover:border-border"
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Platform Super Admin Portal</span>
-        </Link>
-      </div>
 
       {/* PWA Install Button (if eligible and not already standalone) */}
       {!isStandalone && (installPrompt || isIOS) && (

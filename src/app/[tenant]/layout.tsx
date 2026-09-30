@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export default async function TenantRootLayout({
   });
 
   if (!tenant) {
-    notFound();
+    redirect(`/login?ws_not_found=${encodeURIComponent(tenantSlug)}`);
   }
 
   return (

@@ -2,7 +2,7 @@ import { ShieldCheck, Users, Building2 } from "lucide-react";
 import { LoginForm } from "@/components/features/auth/login-form";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import Image from "next/image";
 import prisma from "@/lib/prisma";
 import { appConfig } from "@/lib/app-config";
@@ -31,7 +31,7 @@ export default async function TenantLoginPage({
   });
 
   if (!tenant) {
-    notFound();
+    redirect(`/login?ws_not_found=${encodeURIComponent(tenantSlug)}`);
   }
 
   if (session?.user) {
