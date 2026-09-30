@@ -47,6 +47,7 @@ export const viewport: Viewport = {
 
 import { ImpersonationBanner } from "@/components/super-admin/ImpersonationBanner";
 import { AuthProvider } from "@/components/auth-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export default function RootLayout({
   children,
@@ -64,26 +65,28 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground overflow-x-hidden">
-        <ImpersonationBanner />
-        <NextTopLoader
-          color="#7c3aed"
-          initialPosition={0.08}
-          crawlSpeed={200}
-          height={4}
-          crawl={true}
-          showSpinner={false}
-          easing="ease"
-          speed={200}
-          shadow="0 0 10px #7c3aed,0 0 5px #7c3aed"
-        />
-        <AuthProvider>
-          <TooltipProvider>
-            {children}
-          </TooltipProvider>
-        </AuthProvider>
-        <PWAInstallPrompt />
-        <Toaster position="top-center" richColors swipeDirections={["left", "right"]} />
-        <VersionNotifier />
+        <ThemeProvider attribute="class" forcedTheme="light" enableSystem={false} disableTransitionOnChange>
+          <ImpersonationBanner />
+          <NextTopLoader
+            color="#7c3aed"
+            initialPosition={0.08}
+            crawlSpeed={200}
+            height={4}
+            crawl={true}
+            showSpinner={false}
+            easing="ease"
+            speed={200}
+            shadow="0 0 10px #7c3aed,0 0 5px #7c3aed"
+          />
+          <AuthProvider>
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
+          </AuthProvider>
+          <PWAInstallPrompt />
+          <Toaster position="top-center" richColors swipeDirections={["left", "right"]} />
+          <VersionNotifier />
+        </ThemeProvider>
         <Script
           id="service-worker-registration"
           strategy="afterInteractive"

@@ -5,23 +5,18 @@ import { useRouter } from "next/navigation";
 import {
   Building2,
   Search,
-  Filter,
   Sliders,
-  ShieldAlert,
-  ExternalLink,
   Users,
   HardDrive,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  Lock,
   Plus,
   Copy,
   Check,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { ImpersonateQuickButton } from "./ImpersonateQuickButton";
 import { QuotaConfiguratorModal } from "./QuotaConfiguratorModal";
+import { DeleteTenantModal } from "./DeleteTenantModal";
 import { updateTenantStatus } from "@/actions/super-admin";
 import { toast } from "sonner";
 import { TenantStatus, SubscriptionTier } from "@prisma/client";
@@ -33,6 +28,7 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [planFilter, setPlanFilter] = useState("ALL");
   const [selectedTenantForQuota, setSelectedTenantForQuota] = useState<any | null>(null);
+  const [selectedTenantForDelete, setSelectedTenantForDelete] = useState<any | null>(null);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   // Filtered tenants
@@ -57,34 +53,20 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
     setTimeout(() => setCopiedSlug(null), 2000);
   };
 
-  const handleQuickStatus = async (tenantId: string, newStatus: TenantStatus) => {
-    try {
-      const res = await updateTenantStatus(tenantId, newStatus);
-      if (res.success) {
-        toast.success(`Tenant status changed to ${newStatus}`);
-        setTenants((prev) =>
-          prev.map((t) => (t.id === tenantId ? { ...t, status: newStatus } : t))
-        );
-      }
-    } catch {
-      toast.error("Failed to update status");
-    }
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Search & Filter Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3 flex-1">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
           {/* Search Input */}
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, workspace slug, or legal name..."
-              className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-indigo-500 transition"
+              className="w-full h-9 bg-background border border-input rounded-md py-1.5 pl-9 pr-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition"
             />
           </div>
 
@@ -92,7 +74,7 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-900/80 border border-slate-800 rounded-xl py-2 px-3 text-xs font-medium text-slate-300 outline-none focus:border-indigo-500"
+            className="h-9 bg-background border border-input rounded-md px-2.5 text-xs font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 cursor-pointer"
           >
             <option value="ALL">All Statuses</option>
             <option value={TenantStatus.ACTIVE}>Active</option>
@@ -106,7 +88,7 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
           <select
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
-            className="bg-slate-900/80 border border-slate-800 rounded-xl py-2 px-3 text-xs font-medium text-slate-300 outline-none focus:border-indigo-500"
+            className="h-9 bg-background border border-input rounded-md px-2.5 text-xs font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 cursor-pointer"
           >
             <option value="ALL">All Plans</option>
             <option value={SubscriptionTier.STARTER}>Starter</option>
@@ -118,63 +100,224 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
 
         <Link
           href="/super-admin/tenants/onboarding"
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-600/20 transition self-start md:self-auto cursor-pointer"
+          className="inline-flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold px-3.5 h-9 rounded-md shadow-xs transition self-start md:self-auto cursor-pointer"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="size-3.5" />
           <span>New Tenant</span>
         </Link>
       </div>
 
-      {/* Tenants Table */}
-      <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-xl">
+      {/* Mobile Cards View (Visible on < md screens) */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <div className="bg-card border border-border rounded-md p-8 text-center text-muted-foreground text-xs">
+            No matching tenants found.
+          </div>
+        ) : (
+          filtered.map((t) => (
+            <div
+              key={t.id}
+              className="bg-card border border-border rounded-md p-3.5 shadow-2xs space-y-3"
+            >
+              {/* Header: Avatar, Name, Slug, Plan & Status */}
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div
+                    className="size-8 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs ring-1 ring-border/50"
+                    style={{ backgroundColor: t.primaryColor || "#4f46e5" }}
+                  >
+                    {t.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-xs text-foreground truncate">
+                      {t.name}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="font-mono text-primary bg-primary/10 px-1.5 py-0.2 rounded-xs text-[10px] border border-primary/20">
+                        /{t.slug}
+                      </span>
+                      <button
+                        onClick={() => handleCopyLink(t.slug)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        title="Copy URL"
+                      >
+                        {copiedSlug === t.slug ? (
+                          <Check className="size-3 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <Copy className="size-3" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Plan & Status Badges */}
+                <div className="text-right shrink-0 space-y-1">
+                  <span className="inline-block px-1.5 py-0.2 rounded-xs text-[10px] font-bold tracking-wider uppercase bg-primary/10 text-primary border border-primary/20">
+                    {t.plan}
+                  </span>
+                  <div>
+                    <span
+                      className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
+                        t.status === "ACTIVE"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : t.status === "TRIAL"
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-destructive"
+                      }`}
+                    >
+                      <span className="size-1.5 rounded-full bg-current" />
+                      {t.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Usage Gauges (2 Columns on Mobile) */}
+              <div className="grid grid-cols-2 gap-2.5 pt-1 bg-muted/20 p-2.5 rounded-md border border-border/60">
+                {/* Users */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-mono">
+                    <span className="text-foreground font-semibold text-[10px]">Users</span>
+                    <span className="text-muted-foreground text-[10px]">{t._count.users}/{t.maxUsers}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        t.userPercent > 90
+                          ? "bg-destructive"
+                          : t.userPercent > 70
+                          ? "bg-amber-500"
+                          : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${Math.min(100, t.userPercent)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Storage */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-mono">
+                    <span className="text-blue-600 dark:text-blue-400 font-semibold text-[10px]">Storage</span>
+                    <span className="text-muted-foreground text-[10px]">{t.usedStorageGb}/{t.quotaGb}G</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        t.storagePercent > 90
+                          ? "bg-destructive"
+                          : t.storagePercent > 70
+                          ? "bg-amber-500"
+                          : "bg-blue-500"
+                      }`}
+                      style={{ width: `${Math.min(100, t.storagePercent)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Modules & Action Buttons */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/60">
+                {/* Modules */}
+                <div className="flex items-center gap-1">
+                  {t.payrollEnabled && (
+                    <span className="px-1.5 py-0.5 rounded-xs bg-muted text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-semibold" title="Payroll">
+                      $
+                    </span>
+                  )}
+                  {t.geofencingEnabled && (
+                    <span className="px-1.5 py-0.5 rounded-xs bg-muted text-blue-600 dark:text-blue-400 font-mono text-[9px] font-semibold" title="Geofence">
+                      GPS
+                    </span>
+                  )}
+                  {t.driveEnabled && (
+                    <span className="px-1.5 py-0.5 rounded-xs bg-muted text-primary font-mono text-[9px] font-semibold" title="Drive">
+                      DRV
+                    </span>
+                  )}
+                  {t.fileShareEnabled && (
+                    <span className="px-1.5 py-0.5 rounded-xs bg-muted text-purple-600 dark:text-purple-400 font-mono text-[9px] font-semibold" title="FileShare">
+                      SHR
+                    </span>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1.5">
+                  <ImpersonateQuickButton tenantId={t.id} tenantSlug={t.slug} size="sm" />
+
+                  <button
+                    onClick={() => setSelectedTenantForQuota(t)}
+                    className="p-1.5 rounded-md bg-secondary hover:bg-muted text-secondary-foreground border border-border/80 transition-colors cursor-pointer"
+                    title="Configure Quotas & Features"
+                  >
+                    <Sliders className="size-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedTenantForDelete(t)}
+                    className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 border border-destructive/20 hover:border-destructive/40 transition-colors cursor-pointer"
+                    title="Permanently Delete Tenant"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Tenants Table (Visible on md+ screens) */}
+      <div className="hidden md:block bg-card border border-border rounded-md overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 uppercase tracking-wider font-semibold">
-                <th className="py-3.5 px-4">Organization & Slug</th>
-                <th className="py-3.5 px-4">Plan & Status</th>
-                <th className="py-3.5 px-4">User Capacity</th>
-                <th className="py-3.5 px-4">MinIO Storage</th>
-                <th className="py-3.5 px-4">Modules Active</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+              <tr className="border-b border-border bg-muted/40 text-muted-foreground uppercase text-[11px] font-semibold tracking-wider">
+                <th className="py-3 px-4">Organization & Slug</th>
+                <th className="py-3 px-4">Plan & Status</th>
+                <th className="py-3 px-4">User Capacity</th>
+                <th className="py-3 px-4">MinIO Storage</th>
+                <th className="py-3 px-4">Modules Active</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-border/60">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={6} className="py-10 text-center text-muted-foreground">
                     No matching tenants found.
                   </td>
                 </tr>
               ) : (
                 filtered.map((t) => (
-                  <tr key={t.id} className="hover:bg-slate-800/30 transition group">
+                  <tr key={t.id} className="hover:bg-muted/30 transition-colors group">
                     {/* Name & Slug */}
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
                         <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-md ring-1 ring-white/10"
+                          className="size-8 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs ring-1 ring-border/50"
                           style={{ backgroundColor: t.primaryColor || "#4f46e5" }}
                         >
                           {t.name.slice(0, 2).toUpperCase()}
                         </div>
-                        <div>
-                          <div className="font-bold text-sm text-white flex items-center gap-1.5">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 truncate">
                             {t.name}
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="font-mono text-indigo-400 bg-indigo-950/50 px-1.5 py-0.5 rounded text-[11px] border border-indigo-900/40">
+                            <span className="font-mono text-primary bg-primary/10 px-1.5 py-0.2 rounded-xs text-[10px] border border-primary/20">
                               /{t.slug}
                             </span>
                             <button
                               onClick={() => handleCopyLink(t.slug)}
-                              className="text-slate-500 hover:text-slate-300 transition"
+                              className="text-muted-foreground hover:text-foreground transition-colors"
                               title="Copy URL"
                             >
                               {copiedSlug === t.slug ? (
-                                <Check className="w-3 h-3 text-emerald-400" />
+                                <Check className="size-3 text-emerald-600 dark:text-emerald-400" />
                               ) : (
-                                <Copy className="w-3 h-3" />
+                                <Copy className="size-3" />
                               )}
                             </button>
                           </div>
@@ -183,22 +326,22 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
                     </td>
 
                     {/* Plan & Status */}
-                    <td className="py-4 px-4">
-                      <div className="space-y-1">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                    <td className="py-3 px-4">
+                      <div className="space-y-0.5">
+                        <span className="inline-block px-1.5 py-0.2 rounded-xs text-[10px] font-bold tracking-wider uppercase bg-primary/10 text-primary border border-primary/20">
                           {t.plan}
                         </span>
                         <div>
                           <span
                             className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
                               t.status === "ACTIVE"
-                                ? "text-emerald-400"
+                                ? "text-emerald-600 dark:text-emerald-400"
                                 : t.status === "TRIAL"
-                                ? "text-amber-400"
-                                : "text-rose-400"
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-destructive"
                             }`}
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                            <span className="size-1.5 rounded-full bg-current" />
                             {t.status}
                           </span>
                         </div>
@@ -206,17 +349,17 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
                     </td>
 
                     {/* User Quota */}
-                    <td className="py-4 px-4 min-w-[140px]">
+                    <td className="py-3 px-4 min-w-[130px]">
                       <div className="space-y-1">
                         <div className="flex justify-between text-[11px] font-mono">
-                          <span className="text-slate-300 font-semibold">{t._count.users} Users</span>
-                          <span className="text-slate-500">/ {t.maxUsers}</span>
+                          <span className="text-foreground font-semibold">{t._count.users} Users</span>
+                          <span className="text-muted-foreground">/ {t.maxUsers}</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${
                               t.userPercent > 90
-                                ? "bg-rose-500"
+                                ? "bg-destructive"
                                 : t.userPercent > 70
                                 ? "bg-amber-500"
                                 : "bg-emerald-500"
@@ -228,17 +371,17 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
                     </td>
 
                     {/* Storage Quota */}
-                    <td className="py-4 px-4 min-w-[140px]">
+                    <td className="py-3 px-4 min-w-[130px]">
                       <div className="space-y-1">
                         <div className="flex justify-between text-[11px] font-mono">
-                          <span className="text-blue-300 font-semibold">{t.usedStorageGb} GB</span>
-                          <span className="text-slate-500">/ {t.quotaGb} GB</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold">{t.usedStorageGb} GB</span>
+                          <span className="text-muted-foreground">/ {t.quotaGb} GB</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${
                               t.storagePercent > 90
-                                ? "bg-rose-500"
+                                ? "bg-destructive"
                                 : t.storagePercent > 70
                                 ? "bg-amber-500"
                                 : "bg-blue-500"
@@ -250,25 +393,25 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
                     </td>
 
                     {/* Modules Active */}
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-1.5">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1">
                         {t.payrollEnabled && (
-                          <span className="p-1 rounded bg-slate-800 text-emerald-400 font-mono text-[10px]" title="Payroll">
+                          <span className="px-1.5 py-0.5 rounded-xs bg-muted text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-semibold" title="Payroll">
                             $
                           </span>
                         )}
                         {t.geofencingEnabled && (
-                          <span className="p-1 rounded bg-slate-800 text-blue-400 font-mono text-[10px]" title="Geofence">
+                          <span className="px-1.5 py-0.5 rounded-xs bg-muted text-blue-600 dark:text-blue-400 font-mono text-[9px] font-semibold" title="Geofence">
                             GPS
                           </span>
                         )}
                         {t.driveEnabled && (
-                          <span className="p-1 rounded bg-slate-800 text-indigo-400 font-mono text-[10px]" title="Drive">
+                          <span className="px-1.5 py-0.5 rounded-xs bg-muted text-primary font-mono text-[9px] font-semibold" title="Drive">
                             DRV
                           </span>
                         )}
                         {t.fileShareEnabled && (
-                          <span className="p-1 rounded bg-slate-800 text-purple-400 font-mono text-[10px]" title="FileShare">
+                          <span className="px-1.5 py-0.5 rounded-xs bg-muted text-purple-600 dark:text-purple-400 font-mono text-[9px] font-semibold" title="FileShare">
                             SHR
                           </span>
                         )}
@@ -276,18 +419,24 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
                     </td>
 
                     {/* Actions */}
-                    <td className="py-4 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* Support Impersonate */}
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <ImpersonateQuickButton tenantId={t.id} tenantSlug={t.slug} size="sm" />
 
-                        {/* Configure Quotas */}
                         <button
                           onClick={() => setSelectedTenantForQuota(t)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+                          className="p-1.5 rounded-md bg-secondary hover:bg-muted text-secondary-foreground border border-border/80 transition-colors cursor-pointer"
                           title="Configure Quotas & Features"
                         >
-                          <Sliders className="w-4 h-4" />
+                          <Sliders className="size-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => setSelectedTenantForDelete(t)}
+                          className="p-1.5 rounded-md text-destructive hover:bg-destructive/10 border border-destructive/20 hover:border-destructive/40 transition-colors cursor-pointer"
+                          title="Permanently Delete Tenant"
+                        >
+                          <Trash2 className="size-3.5" />
                         </button>
                       </div>
                     </td>
@@ -306,6 +455,19 @@ export function TenantsManagementTable({ initialTenants }: { initialTenants: any
           isOpen={!!selectedTenantForQuota}
           onClose={() => setSelectedTenantForQuota(null)}
           onSuccess={() => {
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* Permanent Delete Tenant Modal */}
+      {selectedTenantForDelete && (
+        <DeleteTenantModal
+          tenant={selectedTenantForDelete}
+          isOpen={!!selectedTenantForDelete}
+          onClose={() => setSelectedTenantForDelete(null)}
+          onSuccess={(deletedId) => {
+            setTenants((prev) => prev.filter((item) => item.id !== deletedId));
             router.refresh();
           }}
         />

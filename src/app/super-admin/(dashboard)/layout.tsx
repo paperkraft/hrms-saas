@@ -1,19 +1,10 @@
 import { redirect } from "next/navigation";
 import { getSuperAdminSession, getImpersonationSession } from "@/lib/super-admin-auth";
 import Link from "next/link";
-import {
-  LayoutDashboard,
-  Building2,
-  UserPlus,
-  Server,
-  ShieldCheck,
-  HardDrive,
-  Users,
-  Activity,
-  ChevronRight,
-  ExternalLink,
-} from "lucide-react";
+import { ShieldCheck, UserPlus } from "lucide-react";
 import { SuperAdminLogoutButton } from "@/components/super-admin/SuperAdminLogoutButton";
+import { SuperAdminSidebarNav } from "@/components/super-admin/SuperAdminSidebarNav";
+import { SuperAdminMobileNav } from "@/components/super-admin/SuperAdminMobileNav";
 
 export const dynamic = "force-dynamic";
 
@@ -31,95 +22,39 @@ export default async function SuperAdminDashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row antialiased selection:bg-indigo-500/30">
-      {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-slate-900/90 border-r border-slate-800/80 shrink-0 flex flex-col justify-between backdrop-blur-xl z-20">
-        <div>
+    <div className="flex min-h-screen bg-[#fcfcfc] dark:bg-background text-foreground selection:bg-primary/20">
+      {/* Desktop Sidebar Navigation */}
+      <aside className="hidden md:flex md:w-60 bg-sidebar border-r border-sidebar-border shrink-0 flex-col justify-between sticky top-0 h-screen z-30 transition-all duration-200">
+        <div className="overflow-y-auto flex-1">
           {/* Logo Branding */}
-          <div className="p-6 border-b border-slate-800/80">
-            <Link href="/super-admin" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition">
-                <ShieldCheck className="w-6 h-6" />
+          <div className="h-14 border-b border-sidebar-border px-4 flex items-center">
+            <Link href="/super-admin" className="flex items-center gap-2.5 group min-w-0">
+              <div className="size-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-xs shrink-0 group-hover:scale-105 transition">
+                <ShieldCheck className="size-4" />
               </div>
-              <div>
-                <span className="font-bold text-base tracking-tight text-white flex items-center gap-1.5">
+              <div className="min-w-0 flex-1 truncate">
+                <span className="font-bold text-sm tracking-tight text-sidebar-foreground block truncate">
                   Platform Admin
                 </span>
-                <span className="text-[11px] font-mono text-indigo-400 block tracking-wider uppercase">
+                <span className="text-[10px] font-mono text-primary block tracking-wider uppercase truncate">
                   Multi-Tenant Core
                 </span>
               </div>
             </Link>
           </div>
 
-          {/* Nav Items */}
-          <nav className="p-4 space-y-1.5">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-3 py-1">
-              Platform Governance
-            </div>
-            
-            <Link
-              href="/super-admin"
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition"
-            >
-              <LayoutDashboard className="w-4 h-4 text-indigo-400" />
-              <span>Overview</span>
-            </Link>
-
-            <Link
-              href="/super-admin/tenants"
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition"
-            >
-              <Building2 className="w-4 h-4 text-emerald-400" />
-              <span>Tenants & Quotas</span>
-            </Link>
-
-            <Link
-              href="/super-admin/tenants/onboarding"
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition group"
-            >
-              <UserPlus className="w-4 h-4 text-purple-400 group-hover:scale-110 transition" />
-              <span>Onboarding Wizard</span>
-              <span className="ml-auto text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-bold border border-purple-500/30">
-                5-Step
-              </span>
-            </Link>
-
-            <div className="pt-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-3 py-1">
-              Infrastructure
-            </div>
-
-            <div className="px-3.5 py-2 rounded-xl bg-slate-950/60 border border-slate-800/60 text-xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <Server className="w-3.5 h-3.5 text-emerald-400" /> PostgreSQL Pool
-                </span>
-                <span className="text-emerald-400 font-mono text-[10px]">HEALTHY</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <HardDrive className="w-3.5 h-3.5 text-blue-400" /> MinIO Storage
-                </span>
-                <span className="text-blue-400 font-mono text-[10px]">CONNECTED</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-purple-400" /> Edge Router
-                </span>
-                <span className="text-purple-400 font-mono text-[10px]">ACTIVE</span>
-              </div>
-            </div>
-          </nav>
+          {/* Dynamic Client Nav Items with active indicator */}
+          <SuperAdminSidebarNav />
         </div>
 
         {/* User profile & Logout */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-900/40">
-          <div className="flex items-center justify-between gap-3">
-            <div className="truncate">
-              <div className="text-xs font-semibold text-white truncate">
+        <div className="p-3 border-t border-sidebar-border bg-sidebar shrink-0">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="truncate min-w-0 flex-1">
+              <div className="text-xs font-semibold text-sidebar-foreground truncate">
                 {session?.name || "Platform Admin"}
               </div>
-              <div className="text-[11px] text-slate-400 font-mono truncate">
+              <div className="text-[11px] text-muted-foreground font-mono truncate">
                 {session?.email || "superadmin@hrms.com"}
               </div>
             </div>
@@ -132,34 +67,44 @@ export default async function SuperAdminDashboardLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
         {/* Top Navbar */}
-        <header className="h-16 border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md px-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              Platform Live
-            </span>
-            <span>/</span>
-            <span className="text-slate-200">Global SaaS Control Plane</span>
+        <header className="h-14 border-b border-border bg-card flex items-center justify-between px-3.5 sm:px-4 sticky top-0 z-40 transition-colors">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            {/* Mobile Navigation Drawer Trigger */}
+            <SuperAdminMobileNav session={session} />
+
+            <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-muted-foreground min-w-0">
+              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold shrink-0 text-[11px] sm:text-xs">
+                <span className="size-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                Live
+              </span>
+              <span className="text-border">/</span>
+              <span className="text-foreground font-bold text-xs sm:text-sm tracking-tight truncate">
+                Platform Control
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Link
               href="/super-admin/tenants/onboarding"
-              className="hidden sm:inline-flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-md transition"
+              className="inline-flex items-center gap-1 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-md shadow-xs transition"
+              title="Onboard New Tenant"
             >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Onboard Tenant</span>
+              <UserPlus className="size-3.5" />
+              <span className="hidden sm:inline">Onboard Tenant</span>
+              <span className="sm:hidden text-[11px]">New</span>
             </Link>
 
-            <SuperAdminLogoutButton showLabel className="bg-slate-800/60 hover:bg-rose-500/10" />
+            <SuperAdminLogoutButton showLabel className="bg-muted/60 hover:bg-destructive/10 text-muted-foreground hover:text-destructive border border-border/60 text-xs px-2.5 sm:px-3" />
           </div>
         </header>
 
         {/* Body Container */}
-        <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto space-y-8">
+        <main className="flex-1 p-3.5 sm:p-5 md:p-6 max-w-7xl w-full mx-auto space-y-4 sm:space-y-6">
           {children}
         </main>
       </div>
     </div>
   );
 }
+

@@ -947,3 +947,105 @@ export async function stopImpersonation() {
 
   return { success: true, redirectUrl: "/super-admin/tenants" };
 }
+
+/**
+ * Super Admin: Permanently Delete Tenant and All Associated Data
+ */
+export async function deleteTenantPermanently(tenantId: string) {
+  const superAdmin = await requireSuperAdmin();
+
+  if (!tenantId) {
+    return { success: false, error: "Tenant ID is required." };
+  }
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  });
+
+  if (!tenant) {
+    return { success: false, error: "Tenant not found or has already been deleted." };
+  }
+
+  // Prevent deleting platform root / reserved slugs
+  if (tenant.slug === "super-admin" || tenant.slug === "system") {
+    return { success: false, error: "Cannot delete protected system tenant." };
+  }
+
+  try {
+    // 1. Attempt to cleanup MinIO storage items for this tenant
+    try {
+      const [driveItems, fileShares] = await Promise.all([
+        prisma.driveItem.findMany({
+          where: { tenantId: tenant.id, type: "FILE" },
+          select: { storageKey: true, scope: true },
+        }),
+        prisma.fileShare.findMany({
+          where: { tenantId: tenant.id },
+          select: { storageKey: true },
+        }),
+      ]);
+
+      const { minioClient } = await import("@/lib/minio");
+      const { getDriveBucket, getFtpBucket } = await import("@/lib/drive-storage");
+      const ftpBucket = getFtpBucket();
+
+      // Clean up drive files
+      for (const item of driveItems) {
+        if (item.storageKey) {
+          try {
+            const bucket = getDriveBucket(item.scope);
+            await minioClient.removeObject(bucket, item.storageKey);
+          } catch (storageErr) {
+            console.warn(`[MinIO Cleanup Warning] Failed to delete drive file ${item.storageKey}:`, storageErr);
+          }
+        }
+      }
+
+      // Clean up file share files
+      for (const share of fileShares) {
+        if (share.storageKey) {
+          try {
+            await minioClient.removeObject(ftpBucket, share.storageKey);
+          } catch (storageErr) {
+            console.warn(`[MinIO Cleanup Warning] Failed to delete file share ${share.storageKey}:`, storageErr);
+          }
+        }
+      }
+    } catch (minioErr) {
+      console.warn("[MinIO Cleanup] Storage cleanup encountered an error (continuing database deletion):", minioErr);
+    }
+
+    // 2. Clear impersonation session if currently impersonating this tenant
+    const currentImpersonation = await getImpersonationSession();
+    if (currentImpersonation && currentImpersonation.tenantId === tenant.id) {
+      await clearImpersonationSessionCookie();
+    }
+
+    // 3. Delete tenant from database (Prisma CASCADE will wipe all child tables)
+    await prisma.tenant.delete({
+      where: { id: tenant.id },
+    });
+
+    console.log(`[Super Admin] Tenant "${tenant.name}" (${tenant.slug}) permanently deleted by ${superAdmin.email}`);
+
+    revalidatePath("/super-admin");
+    revalidatePath("/super-admin/tenants");
+
+    return {
+      success: true,
+      message: `Tenant "${tenant.name}" (/${tenant.slug}) has been permanently deleted.`,
+    };
+  } catch (err: any) {
+    console.error("[deleteTenantPermanently Error]", err);
+    return {
+      success: false,
+      error: err.message || "Failed to permanently delete tenant.",
+    };
+  }
+}
+

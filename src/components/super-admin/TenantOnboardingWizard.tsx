@@ -24,9 +24,7 @@ import {
   Check,
   RefreshCw,
   Clock,
-  Briefcase,
   ExternalLink,
-  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SubscriptionTier } from "@prisma/client";
@@ -258,25 +256,25 @@ export function TenantOnboardingWizard() {
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
+    <div className="space-y-6 animate-fade-in">
+      {/* Top Header Banner */}
+      <div className="rounded-md bg-card border border-border/80 p-4 sm:p-5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold uppercase tracking-wider mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider mb-1.5">
+            <Sparkles className="size-3" />
             Zero-Downtime Provisioning
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+          <h1 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
             Tenant Onboarding Wizard
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Configure, initialize, and deploy a fully-isolated organizational workspace in 5 easy steps.
           </p>
         </div>
       </div>
 
       {/* Stepper Progress Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
         {STEPS.map((s) => {
           const Icon = s.icon;
           const isActive = step === s.num;
@@ -288,31 +286,31 @@ export function TenantOnboardingWizard() {
               onClick={() => {
                 if (isDone) setStep(s.num);
               }}
-              className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+              className={`p-3 rounded-md border transition-all duration-200 cursor-pointer ${
                 isActive
-                  ? "bg-indigo-950/70 border-indigo-500/60 shadow-lg shadow-indigo-500/10 ring-1 ring-indigo-500/30"
+                  ? "bg-primary/5 border-primary shadow-2xs"
                   : isDone
-                  ? "bg-slate-900/60 border-slate-800/80 text-emerald-400"
-                  : "bg-slate-950/40 border-slate-900 text-slate-500 opacity-60"
+                  ? "bg-card border-border text-foreground hover:bg-muted/40"
+                  : "bg-muted/20 border-border/50 text-muted-foreground opacity-60"
               }`}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 transition ${
+                  className={`size-7 rounded-md flex items-center justify-center text-xs font-bold shrink-0 transition ${
                     isActive
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                      ? "bg-primary text-primary-foreground shadow-xs"
                       : isDone
-                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                      : "bg-slate-800 text-slate-400"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                      : "bg-muted text-muted-foreground"
                   }`}
                 >
-                  {isDone ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                  {isDone ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}
                 </div>
-                <div className="truncate">
-                  <div className={`text-xs font-bold ${isActive ? "text-white" : isDone ? "text-slate-200" : "text-slate-400"}`}>
+                <div className="truncate min-w-0">
+                  <div className={`text-xs font-bold truncate ${isActive ? "text-primary" : "text-foreground"}`}>
                     {s.title}
                   </div>
-                  <div className="text-[11px] text-slate-500 truncate hidden sm:block">
+                  <div className="text-[10px] text-muted-foreground truncate hidden sm:block">
                     {s.desc}
                   </div>
                 </div>
@@ -324,76 +322,76 @@ export function TenantOnboardingWizard() {
 
       {/* Success Result View */}
       {createdResult ? (
-        <div className="p-8 rounded-3xl bg-gradient-to-b from-slate-900/90 to-slate-950 border border-emerald-500/30 shadow-2xl backdrop-blur-xl text-center space-y-6">
-          <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/10 animate-bounce">
-            <CheckCircle2 className="w-9 h-9" />
+        <div className="p-6 sm:p-8 rounded-md bg-card border border-border shadow-2xs text-center space-y-5">
+          <div className="size-12 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-xs">
+            <CheckCircle2 className="size-6" />
           </div>
 
           <div>
-            <h2 className="text-2xl font-extrabold text-white">
+            <h2 className="text-lg sm:text-xl font-bold text-foreground">
               Workspace Provisioned Successfully!
             </h2>
-            <p className="text-slate-400 text-sm mt-2 max-w-md mx-auto">
+            <p className="text-muted-foreground text-xs mt-1 max-w-md mx-auto">
               <strong>{createdResult.name}</strong> is now live with isolated database routing, RBAC roles, storage limits, and admin credentials.
             </p>
           </div>
 
           {/* Credentials Card */}
-          <div className="max-w-lg mx-auto p-5 rounded-2xl bg-slate-950 border border-slate-800 text-left space-y-3 font-mono text-xs">
-            <div className="flex justify-between items-center text-slate-400 pb-2 border-b border-slate-800 font-sans">
-              <span className="font-semibold text-slate-300">Access Coordinates</span>
-              <span className="text-emerald-400 text-[11px] font-mono">STATUS: ACTIVE</span>
+          <div className="max-w-md mx-auto p-4 rounded-md bg-muted/40 border border-border text-left space-y-2.5 font-mono text-xs">
+            <div className="flex justify-between items-center text-muted-foreground pb-2 border-b border-border font-sans">
+              <span className="font-semibold text-foreground text-xs">Access Coordinates</span>
+              <span className="text-emerald-600 dark:text-emerald-400 text-[10px] font-mono font-semibold">STATUS: ACTIVE</span>
             </div>
-            <div>
-              <span className="text-slate-500">Tenant URL: </span>
-              <span className="text-indigo-400 font-bold">/{createdResult.slug}/dashboard</span>
+            <div className="text-xs">
+              <span className="text-muted-foreground">Tenant URL: </span>
+              <span className="text-primary font-bold">/{createdResult.slug}/dashboard</span>
             </div>
-            <div>
-              <span className="text-slate-500">Admin Email: </span>
-              <span className="text-slate-200">{createdResult.adminEmail}</span>
+            <div className="text-xs">
+              <span className="text-muted-foreground">Admin Email: </span>
+              <span className="text-foreground">{createdResult.adminEmail}</span>
             </div>
-            <div>
-              <span className="text-slate-500">Initial Password: </span>
-              <span className="text-amber-400 font-semibold">{formData.adminPassword}</span>
+            <div className="text-xs">
+              <span className="text-muted-foreground">Initial Password: </span>
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">{formData.adminPassword}</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <button
               onClick={() => router.push(`/super-admin/tenants`)}
-              className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold transition"
+              className="px-4 py-2 rounded-md bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-input text-xs font-semibold transition cursor-pointer"
             >
               Return to Tenants Fleet
             </button>
 
             <button
               onClick={() => router.push(`/${createdResult.slug}/dashboard/admin`)}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition"
+              className="px-4 py-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs flex items-center gap-1.5 transition cursor-pointer"
             >
               <span>Launch Workspace Portal</span>
-              <ExternalLink className="w-4 h-4" />
+              <ExternalLink className="size-3.5" />
             </button>
           </div>
         </div>
       ) : (
         /* Wizard Form Body */
-        <div className="p-6 md:p-8 rounded-3xl bg-slate-900/70 border border-slate-800/80 shadow-2xl backdrop-blur-xl space-y-6">
+        <div className="p-5 sm:p-6 rounded-md bg-card border border-border/80 shadow-2xs space-y-6">
           {/* STEP 1: ORGANIZATION PROFILE & SLUG */}
           {step === 1 && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-slate-800/60 pb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-indigo-400" />
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-border/80 pb-3">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Building2 className="size-4 text-primary" />
                   Step 1: Organization Identity & Workspace URL
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Define the primary business entity details and unique URL path slug.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Organization Display Name *
                   </label>
                   <input
@@ -411,16 +409,16 @@ export function TenantOnboardingWizard() {
                       }
                     }}
                     placeholder="e.g. Sigma Infraplan Pvt Ltd"
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Workspace URL Slug *
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-xs">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-xs">
                       /
                     </span>
                     <input
@@ -428,26 +426,26 @@ export function TenantOnboardingWizard() {
                       value={formData.slug}
                       onChange={(e) => handleSlugChange(e.target.value)}
                       placeholder="sigma"
-                      className={`w-full bg-slate-950/70 border rounded-xl py-2.5 pl-7 pr-10 text-sm font-mono text-indigo-300 outline-none ${
+                      className={`w-full h-9 bg-background border rounded-md pl-6 pr-8 text-xs sm:text-sm font-mono text-primary outline-none transition ${
                         slugAvailable === true
-                          ? "border-emerald-500/80"
+                          ? "border-emerald-500"
                           : slugAvailable === false
-                          ? "border-rose-500/80"
-                          : "border-slate-700/80 focus:border-indigo-500"
+                          ? "border-destructive"
+                          : "border-input focus:border-primary focus:ring-1 focus:ring-primary/20"
                       }`}
                     />
-                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
                       {slugChecking ? (
-                        <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                        <Loader2 className="size-3.5 text-primary animate-spin" />
                       ) : slugAvailable === true ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
+                        <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                       ) : null}
                     </div>
                   </div>
                   {slugMessage && (
                     <p
-                      className={`text-[11px] mt-1.5 font-medium ${
-                        slugAvailable ? "text-emerald-400" : "text-rose-400"
+                      className={`text-[11px] mt-1 font-medium ${
+                        slugAvailable ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                       }`}
                     >
                       {slugMessage}
@@ -456,7 +454,7 @@ export function TenantOnboardingWizard() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Legal Entity Name
                   </label>
                   <input
@@ -464,12 +462,12 @@ export function TenantOnboardingWizard() {
                     value={formData.legalName}
                     onChange={(e) => setFormData((p) => ({ ...p, legalName: e.target.value }))}
                     placeholder="e.g. SIGMA INFRAPLAN ENGINEERING PVT. LTD."
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Brand Color Palette
                   </label>
                   <div className="flex items-center gap-2">
@@ -478,9 +476,9 @@ export function TenantOnboardingWizard() {
                         type="button"
                         key={c.hex}
                         onClick={() => setFormData((p) => ({ ...p, primaryColor: c.hex }))}
-                        className={`w-7 h-7 rounded-full transition-transform cursor-pointer ring-2 ${
+                        className={`size-6 rounded-full transition-transform cursor-pointer ring-2 ${
                           formData.primaryColor === c.hex
-                            ? "ring-white scale-110 shadow-lg"
+                            ? "ring-primary scale-110 shadow-xs"
                             : "ring-transparent hover:scale-105"
                         }`}
                         style={{ backgroundColor: c.hex }}
@@ -491,13 +489,13 @@ export function TenantOnboardingWizard() {
                       type="color"
                       value={formData.primaryColor}
                       onChange={(e) => setFormData((p) => ({ ...p, primaryColor: e.target.value }))}
-                      className="w-8 h-8 rounded-lg bg-transparent border-0 cursor-pointer ml-2"
+                      className="size-7 rounded-md bg-transparent border-0 cursor-pointer ml-1"
                     />
                   </div>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Headquarters Street Address
                   </label>
                   <input
@@ -505,7 +503,7 @@ export function TenantOnboardingWizard() {
                     value={formData.address}
                     onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
                     placeholder="e.g. Plot No. 13, Laxmi Nagar, Kolhapur 416005, Maharashtra"
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition"
                   />
                 </div>
               </div>
@@ -514,47 +512,47 @@ export function TenantOnboardingWizard() {
 
           {/* STEP 2: SUBSCRIPTION TIER & QUOTA LIMITS */}
           {step === 2 && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-slate-800/60 pb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Sliders className="w-5 h-5 text-indigo-400" />
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-border/80 pb-3">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Sliders className="size-4 text-primary" />
                   Step 2: Subscription Tier, Seat Quotas & Feature Toggles
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Configure user seat capacity, MinIO storage limits, and module availability.
                 </p>
               </div>
 
               {/* Plan Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
                   {
                     tier: SubscriptionTier.STARTER,
                     name: "Starter",
                     seats: "Up to 50 Seats",
                     storage: "50 GB MinIO",
-                    desc: "Ideal for boutique consultancies & emerging startups.",
+                    desc: "Ideal for boutique consultancies & startups.",
                   },
                   {
                     tier: SubscriptionTier.PROFESSIONAL,
                     name: "Professional",
                     seats: "Up to 250 Seats",
                     storage: "250 GB MinIO",
-                    desc: "Optimal for mid-sized growing engineering teams.",
+                    desc: "Optimal for growing engineering teams.",
                   },
                   {
                     tier: SubscriptionTier.ENTERPRISE,
                     name: "Enterprise",
                     seats: "Up to 1,000 Seats",
                     storage: "1 TB MinIO",
-                    desc: "Full-scale corporate governance and unlimited archival.",
+                    desc: "Corporate governance & archival.",
                   },
                   {
                     tier: SubscriptionTier.CUSTOM,
                     name: "Custom / Flex",
                     seats: "Manual Quota",
                     storage: "Custom Storage",
-                    desc: "Tailored seat and storage allocation.",
+                    desc: "Tailored seat & storage allocation.",
                   },
                 ].map((p) => {
                   const isSelected = formData.plan === p.tier;
@@ -562,27 +560,27 @@ export function TenantOnboardingWizard() {
                     <div
                       key={p.tier}
                       onClick={() => handlePlanSelect(p.tier)}
-                      className={`p-5 rounded-2xl border transition cursor-pointer flex flex-col justify-between ${
+                      className={`p-4 rounded-md border transition-all cursor-pointer flex flex-col justify-between ${
                         isSelected
-                          ? "bg-indigo-950/80 border-indigo-500 shadow-xl shadow-indigo-500/10 ring-2 ring-indigo-500/30"
-                          : "bg-slate-950/60 border-slate-800/80 hover:border-slate-700"
+                          ? "bg-primary/5 border-primary shadow-2xs ring-1 ring-primary/30"
+                          : "bg-card border-border hover:bg-muted/30"
                       }`}
                     >
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-sm text-white">{p.name}</span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-xs text-foreground">{p.name}</span>
                           {isSelected && (
-                            <span className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px]">
+                            <span className="size-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[9px] font-bold">
                               ✓
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 mb-3">{p.desc}</p>
+                        <p className="text-[11px] text-muted-foreground mb-2.5">{p.desc}</p>
                       </div>
 
-                      <div className="space-y-1 pt-3 border-t border-slate-800/60 font-mono text-xs">
-                        <div className="text-indigo-300 font-semibold">{p.seats}</div>
-                        <div className="text-blue-400">{p.storage}</div>
+                      <div className="space-y-0.5 pt-2 border-t border-border/60 font-mono text-[11px]">
+                        <div className="text-primary font-semibold">{p.seats}</div>
+                        <div className="text-blue-600 dark:text-blue-400">{p.storage}</div>
                       </div>
                     </div>
                   );
@@ -590,14 +588,14 @@ export function TenantOnboardingWizard() {
               </div>
 
               {/* Sliders / Inputs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
-                <div className="p-5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 rounded-md bg-muted/40 border border-border/80 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                      <Users className="w-4 h-4 text-emerald-400" />
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Users className="size-3.5 text-primary" />
                       Max User Seat Limit
                     </label>
-                    <span className="font-bold font-mono text-emerald-400 text-base">
+                    <span className="font-bold font-mono text-primary text-sm">
                       {formData.maxUsers} Users
                     </span>
                   </div>
@@ -610,17 +608,17 @@ export function TenantOnboardingWizard() {
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, maxUsers: parseInt(e.target.value) || 1 }))
                     }
-                    className="w-full accent-indigo-500 cursor-pointer"
+                    className="w-full accent-primary cursor-pointer"
                   />
                 </div>
 
-                <div className="p-5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-3">
+                <div className="p-4 rounded-md bg-muted/40 border border-border/80 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                      <HardDrive className="w-4 h-4 text-blue-400" />
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <HardDrive className="size-3.5 text-blue-600 dark:text-blue-400" />
                       Drive & File Storage Quota
                     </label>
-                    <span className="font-bold font-mono text-blue-400 text-base">
+                    <span className="font-bold font-mono text-blue-600 dark:text-blue-400 text-sm">
                       {formData.driveQuotaGb} GB
                     </span>
                   </div>
@@ -633,28 +631,28 @@ export function TenantOnboardingWizard() {
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, driveQuotaGb: parseInt(e.target.value) || 1 }))
                     }
-                    className="w-full accent-blue-500 cursor-pointer"
+                    className="w-full accent-blue-600 cursor-pointer"
                   />
                 </div>
               </div>
 
               {/* Granular Module Switches */}
-              <div className="space-y-3 pt-2">
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div className="space-y-2.5 pt-2">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Module Feature Switches
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                   {[
-                    { key: "payrollEnabled", label: "Payroll & Salary Structures" },
-                    { key: "geofencingEnabled", label: "Geofencing & GPS Radius" },
+                    { key: "payrollEnabled", label: "Payroll & Compensation" },
+                    { key: "geofencingEnabled", label: "Geofencing & Mobile Punch" },
                     { key: "driveEnabled", label: "Drive Storage & Library" },
                     { key: "fileShareEnabled", label: "Direct File Share Links" },
                     { key: "taskCommitmentEnabled", label: "Task Commitments & Sprints" },
                   ].map((f) => (
                     <label
                       key={f.key}
-                      className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 text-xs font-medium text-slate-200 cursor-pointer hover:bg-slate-900 transition"
+                      className="flex items-center justify-between p-3 rounded-md bg-muted/30 border border-border text-xs font-medium text-foreground cursor-pointer hover:bg-muted/60 transition-colors"
                     >
                       <span>{f.label}</span>
                       <input
@@ -663,7 +661,7 @@ export function TenantOnboardingWizard() {
                         onChange={(e) =>
                           setFormData((prev) => ({ ...prev, [f.key]: e.target.checked }))
                         }
-                        className="w-4 h-4 rounded text-indigo-600 accent-indigo-500 cursor-pointer"
+                        className="size-4 rounded-xs accent-primary cursor-pointer"
                       />
                     </label>
                   ))}
@@ -674,20 +672,20 @@ export function TenantOnboardingWizard() {
 
           {/* STEP 3: INITIAL ADMINISTRATOR */}
           {step === 3 && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-slate-800/60 pb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-indigo-400" />
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-border/80 pb-3">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <UserCheck className="size-4 text-primary" />
                   Step 3: Root Tenant Administrator Account
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Provision the primary administrator user with root organization authority.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Administrator Full Name *
                   </label>
                   <input
@@ -695,12 +693,12 @@ export function TenantOnboardingWizard() {
                     value={formData.adminName}
                     onChange={(e) => setFormData((p) => ({ ...p, adminName: e.target.value }))}
                     placeholder="e.g. Ashish Doshi"
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Administrator Official Email *
                   </label>
                   <input
@@ -708,21 +706,21 @@ export function TenantOnboardingWizard() {
                     value={formData.adminEmail}
                     onChange={(e) => setFormData((p) => ({ ...p, adminEmail: e.target.value }))}
                     placeholder="e.g. admin@sigma.com"
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-foreground">
                       Initial Password *
                     </label>
                     <button
                       type="button"
                       onClick={generateRandomPassword}
-                      className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] text-primary hover:underline flex items-center gap-1 cursor-pointer font-medium"
                     >
-                      <RefreshCw className="w-3 h-3" /> Generate Random
+                      <RefreshCw className="size-3" /> Generate Random
                     </button>
                   </div>
                   <div className="relative">
@@ -730,25 +728,25 @@ export function TenantOnboardingWizard() {
                       type="text"
                       value={formData.adminPassword}
                       onChange={(e) => setFormData((p) => ({ ...p, adminPassword: e.target.value }))}
-                      className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 pl-4 pr-10 text-sm font-mono text-amber-300 outline-none"
+                      className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md pl-3 pr-8 text-xs font-mono text-amber-600 dark:text-amber-400 outline-none transition"
                     />
                     <button
                       type="button"
                       onClick={handleCopyPassword}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                       title="Copy Password"
                     >
                       {copiedPassword ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
+                        <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                       ) : (
-                        <Copy className="w-4 h-4" />
+                        <Copy className="size-3.5" />
                       )}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Designation / Title
                   </label>
                   <input
@@ -758,7 +756,7 @@ export function TenantOnboardingWizard() {
                       setFormData((p) => ({ ...p, adminDesignation: e.target.value }))
                     }
                     placeholder="Managing Director / CEO"
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition"
                   />
                 </div>
               </div>
@@ -767,44 +765,44 @@ export function TenantOnboardingWizard() {
 
           {/* STEP 4: WORKPLACE TIMINGS & LOCATION */}
           {step === 4 && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-slate-800/60 pb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-indigo-400" />
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-border/80 pb-3">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <MapPin className="size-4 text-primary" />
                   Step 4: Workplace Policies & Headquarters Geofence
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Establish working hours, punch grace allowance, and primary branch geofence.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-indigo-400" /> Office Start Time
+                  <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1">
+                    <Clock className="size-3 text-primary" /> Office Start Time
                   </label>
                   <input
                     type="time"
                     value={formData.officeStartTime}
                     onChange={(e) => setFormData((p) => ({ ...p, officeStartTime: e.target.value }))}
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs text-foreground outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-indigo-400" /> Office End Time
+                  <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1">
+                    <Clock className="size-3 text-primary" /> Office End Time
                   </label>
                   <input
                     type="time"
                     value={formData.officeEndTime}
                     onChange={(e) => setFormData((p) => ({ ...p, officeEndTime: e.target.value }))}
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs text-foreground outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Late Mark Grace Time (Mins)
                   </label>
                   <input
@@ -815,12 +813,12 @@ export function TenantOnboardingWizard() {
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, graceTimeMinutes: parseInt(e.target.value) || 0 }))
                     }
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white outline-none font-mono"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs font-mono text-foreground outline-none transition"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Primary Office / HQ Location Name
                   </label>
                   <input
@@ -828,12 +826,12 @@ export function TenantOnboardingWizard() {
                     value={formData.locationName}
                     onChange={(e) => setFormData((p) => ({ ...p, locationName: e.target.value }))}
                     placeholder="Head Office - Kolhapur"
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white placeholder:text-slate-600 outline-none"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
                     Geofence Radius (Meters)
                   </label>
                   <input
@@ -844,7 +842,7 @@ export function TenantOnboardingWizard() {
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, locationRadius: parseInt(e.target.value) || 50 }))
                     }
-                    className="w-full bg-slate-950/70 border border-slate-700/80 focus:border-indigo-500 rounded-xl py-2.5 px-4 text-sm text-white outline-none font-mono"
+                    className="w-full h-9 bg-background border border-input focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-md px-3 text-xs font-mono text-foreground outline-none transition"
                   />
                 </div>
               </div>
@@ -853,107 +851,107 @@ export function TenantOnboardingWizard() {
 
           {/* STEP 5: REVIEW & INSTANT PROVISIONING */}
           {step === 5 && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-slate-800/60 pb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-indigo-400" />
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-border/80 pb-3">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <CheckCircle2 className="size-4 text-primary" />
                   Step 5: Review & Instant Fleet Provisioning
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Confirm the parameters before launching the isolated tenant database partition.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Organization Summary */}
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2 text-xs">
-                  <div className="font-bold text-indigo-300 uppercase text-[11px] pb-1 border-b border-slate-800">
+                <div className="p-3.5 rounded-md bg-muted/40 border border-border/80 space-y-1.5 text-xs">
+                  <div className="font-bold text-primary uppercase text-[10px] pb-1 border-b border-border">
                     Organization Profile
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Name:</span>
-                    <strong className="text-white">{formData.name}</strong>
+                    <span className="text-muted-foreground">Name:</span>
+                    <strong className="text-foreground">{formData.name}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">URL Slug:</span>
-                    <strong className="text-indigo-400 font-mono">/{formData.slug}</strong>
+                    <span className="text-muted-foreground">URL Slug:</span>
+                    <strong className="text-primary font-mono">/{formData.slug}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Legal Name:</span>
-                    <span className="text-slate-300">{formData.legalName || formData.name}</span>
+                    <span className="text-muted-foreground">Legal Name:</span>
+                    <span className="text-foreground">{formData.legalName || formData.name}</span>
                   </div>
                 </div>
 
                 {/* Plan Summary */}
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2 text-xs">
-                  <div className="font-bold text-indigo-300 uppercase text-[11px] pb-1 border-b border-slate-800">
+                <div className="p-3.5 rounded-md bg-muted/40 border border-border/80 space-y-1.5 text-xs">
+                  <div className="font-bold text-primary uppercase text-[10px] pb-1 border-b border-border">
                     Tier & Storage
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Plan Tier:</span>
-                    <strong className="text-white">{formData.plan}</strong>
+                    <span className="text-muted-foreground">Plan Tier:</span>
+                    <strong className="text-foreground">{formData.plan}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">User Limit:</span>
-                    <strong className="text-emerald-400 font-mono">{formData.maxUsers} Users</strong>
+                    <span className="text-muted-foreground">User Limit:</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{formData.maxUsers} Users</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Drive Quota:</span>
-                    <strong className="text-blue-400 font-mono">{formData.driveQuotaGb} GB</strong>
+                    <span className="text-muted-foreground">Drive Quota:</span>
+                    <strong className="text-blue-600 dark:text-blue-400 font-mono">{formData.driveQuotaGb} GB</strong>
                   </div>
                 </div>
 
                 {/* Administrator Summary */}
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2 text-xs">
-                  <div className="font-bold text-indigo-300 uppercase text-[11px] pb-1 border-b border-slate-800">
+                <div className="p-3.5 rounded-md bg-muted/40 border border-border/80 space-y-1.5 text-xs">
+                  <div className="font-bold text-primary uppercase text-[10px] pb-1 border-b border-border">
                     Root Administrator
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Admin Name:</span>
-                    <strong className="text-white">{formData.adminName}</strong>
+                    <span className="text-muted-foreground">Admin Name:</span>
+                    <strong className="text-foreground">{formData.adminName}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Admin Email:</span>
-                    <strong className="text-slate-200">{formData.adminEmail}</strong>
+                    <span className="text-muted-foreground">Admin Email:</span>
+                    <strong className="text-foreground">{formData.adminEmail}</strong>
                   </div>
                 </div>
 
                 {/* Workplace Summary */}
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2 text-xs">
-                  <div className="font-bold text-indigo-300 uppercase text-[11px] pb-1 border-b border-slate-800">
+                <div className="p-3.5 rounded-md bg-muted/40 border border-border/80 space-y-1.5 text-xs">
+                  <div className="font-bold text-primary uppercase text-[10px] pb-1 border-b border-border">
                     Workplace Timings
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Hours:</span>
-                    <strong className="text-white">
+                    <span className="text-muted-foreground">Hours:</span>
+                    <strong className="text-foreground">
                       {formData.officeStartTime} - {formData.officeEndTime}
                     </strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Grace Allowance:</span>
-                    <span className="text-slate-300">{formData.graceTimeMinutes} mins</span>
+                    <span className="text-muted-foreground">Grace Allowance:</span>
+                    <span className="text-foreground">{formData.graceTimeMinutes} mins</span>
                   </div>
                 </div>
               </div>
 
               {loading && (
-                <div className="p-4 rounded-2xl bg-indigo-950/60 border border-indigo-500/40 text-center space-y-2 animate-pulse">
-                  <Loader2 className="w-6 h-6 text-indigo-400 animate-spin mx-auto" />
-                  <p className="text-xs font-mono text-indigo-200">{provisioningStatus}</p>
+                <div className="p-3.5 rounded-md bg-primary/10 border border-primary/30 text-center space-y-1.5 animate-pulse">
+                  <Loader2 className="size-5 text-primary animate-spin mx-auto" />
+                  <p className="text-xs font-mono text-primary font-medium">{provisioningStatus}</p>
                 </div>
               )}
             </div>
           )}
 
           {/* Navigation Controls */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-800/60">
+          <div className="flex items-center justify-between pt-3 border-t border-border">
             <button
               type="button"
               onClick={handleBack}
               disabled={step === 1 || loading}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-30 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-md bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-input text-xs font-semibold flex items-center gap-1.5 disabled:opacity-30 cursor-pointer transition"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="size-3.5" />
               <span>Back</span>
             </button>
 
@@ -961,26 +959,26 @@ export function TenantOnboardingWizard() {
               <button
                 type="button"
                 onClick={handleNext}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 cursor-pointer"
+                className="px-4 py-1.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer transition"
               >
                 <span>Continue</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="size-3.5" />
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleExecuteOnboarding}
                 disabled={loading}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-xl shadow-emerald-600/25 disabled:opacity-50 cursor-pointer"
+                className="px-4 py-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer transition"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Provisioning Fleet Partition...</span>
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Provisioning Fleet...</span>
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="w-4 h-4" />
+                    <ShieldCheck className="size-4" />
                     <span>Deploy & Launch Tenant</span>
                   </>
                 )}

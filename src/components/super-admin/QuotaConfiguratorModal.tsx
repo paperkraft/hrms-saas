@@ -7,15 +7,11 @@ import {
 } from "@/actions/super-admin";
 import {
   X,
-  Sliders,
   HardDrive,
   Users,
-  ShieldCheck,
   CheckCircle2,
   Mail,
   Loader2,
-  Layers,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SubscriptionTier, TenantStatus } from "@prisma/client";
@@ -73,38 +69,38 @@ export function QuotaConfiguratorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-2xl bg-card border border-border rounded-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-muted/30">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">
+              <span className="text-[10px] font-bold text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-sm">
                 Quota & Feature Configurator
               </span>
-              <span className="font-mono text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+              <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                 /{tenant.slug}
               </span>
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight mt-0.5">
+            <h2 className="text-base sm:text-lg font-bold text-foreground tracking-tight mt-1">
               {tenant.name}
             </h2>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="size-4" />
           </button>
         </div>
 
         {/* Modal Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1 text-sm">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-5 overflow-y-auto flex-1 text-xs sm:text-sm">
           {/* Status & Plan Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Subscription Status
               </label>
               <select
@@ -112,7 +108,7 @@ export function QuotaConfiguratorModal({
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, status: e.target.value as TenantStatus }))
                 }
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="w-full h-9 bg-background border border-input rounded-md px-3 text-xs text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
               >
                 <option value={TenantStatus.ACTIVE}>ACTIVE - Full Platform Access</option>
                 <option value={TenantStatus.TRIAL}>TRIAL - Evaluation Period</option>
@@ -123,7 +119,7 @@ export function QuotaConfiguratorModal({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Subscription Tier
               </label>
               <select
@@ -131,7 +127,7 @@ export function QuotaConfiguratorModal({
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, plan: e.target.value as SubscriptionTier }))
                 }
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2.5 px-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="w-full h-9 bg-background border border-input rounded-md px-3 text-xs text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
               >
                 <option value={SubscriptionTier.STARTER}>STARTER Tier</option>
                 <option value={SubscriptionTier.PROFESSIONAL}>PROFESSIONAL Tier</option>
@@ -142,13 +138,13 @@ export function QuotaConfiguratorModal({
           </div>
 
           {/* Quotas Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="p-3.5 rounded-md bg-muted/40 border border-border space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-emerald-400" /> Max User Seats
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Users className="size-3.5 text-primary" /> Max User Seats
                 </span>
-                <span className="text-emerald-400 font-bold font-mono text-sm">
+                <span className="text-primary font-bold font-mono text-xs">
                   {formData.maxUsers} Seats
                 </span>
               </div>
@@ -160,19 +156,19 @@ export function QuotaConfiguratorModal({
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, maxUsers: parseInt(e.target.value) || 1 }))
                 }
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-sm font-mono text-white outline-none focus:border-indigo-500"
+                className="w-full h-8 bg-background border border-input rounded-md px-2.5 text-xs font-mono text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
               />
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-muted-foreground">
                 Currently using {tenant._count?.users || 0} active seats
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+            <div className="p-3.5 rounded-md bg-muted/40 border border-border space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <HardDrive className="w-4 h-4 text-blue-400" /> Drive Storage (GB)
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <HardDrive className="size-3.5 text-blue-600 dark:text-blue-400" /> Drive Storage (GB)
                 </span>
-                <span className="text-blue-400 font-bold font-mono text-sm">
+                <span className="text-blue-600 dark:text-blue-400 font-bold font-mono text-xs">
                   {formData.driveQuotaGb} GB
                 </span>
               </div>
@@ -184,9 +180,9 @@ export function QuotaConfiguratorModal({
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, driveQuotaGb: parseInt(e.target.value) || 1 }))
                 }
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-sm font-mono text-white outline-none focus:border-indigo-500"
+                className="w-full h-8 bg-background border border-input rounded-md px-2.5 text-xs font-mono text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
               />
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-muted-foreground">
                 Currently using {tenant.usedStorageGb || 0} GB
               </p>
             </div>
@@ -194,10 +190,10 @@ export function QuotaConfiguratorModal({
 
           {/* Granular Feature Toggles */}
           <div className="space-y-2">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Tenant Feature Flags
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { key: "payrollEnabled", label: "Payroll & Compensation" },
                 { key: "geofencingEnabled", label: "Geofenced Mobile Punch" },
@@ -207,7 +203,7 @@ export function QuotaConfiguratorModal({
               ].map((f) => (
                 <label
                   key={f.key}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800 text-xs font-medium text-slate-200 cursor-pointer hover:bg-slate-800/40 transition"
+                  className="flex items-center justify-between p-2.5 rounded-md bg-muted/30 border border-border text-xs font-medium text-foreground cursor-pointer hover:bg-muted/60 transition-colors"
                 >
                   <span>{f.label}</span>
                   <input
@@ -216,7 +212,7 @@ export function QuotaConfiguratorModal({
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, [f.key]: e.target.checked }))
                     }
-                    className="w-4 h-4 rounded text-indigo-600 accent-indigo-500 cursor-pointer"
+                    className="size-4 rounded-xs accent-primary cursor-pointer"
                   />
                 </label>
               ))}
@@ -224,17 +220,17 @@ export function QuotaConfiguratorModal({
           </div>
 
           {/* Custom SMTP Configuration */}
-          <div className="space-y-3 pt-2">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-purple-400" /> Custom SMTP Mailer (Optional)
+          <div className="space-y-2.5 pt-1">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Mail className="size-3.5 text-primary" /> Custom SMTP Mailer (Optional)
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <input
                 type="text"
                 placeholder="SMTP Host (e.g. smtp.office365.com)"
                 value={formData.smtpHost || ""}
                 onChange={(e) => setFormData((p) => ({ ...p, smtpHost: e.target.value }))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 px-3 text-xs text-white outline-none focus:border-indigo-500"
+                className="w-full h-8 bg-background border border-input rounded-md px-2.5 text-xs text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
               />
               <input
                 type="number"
@@ -243,47 +239,47 @@ export function QuotaConfiguratorModal({
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, smtpPort: parseInt(e.target.value) || null }))
                 }
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 px-3 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                className="w-full h-8 bg-background border border-input rounded-md px-2.5 text-xs text-foreground outline-none focus:border-primary font-mono"
               />
               <input
                 type="text"
                 placeholder="SMTP Username / Email"
                 value={formData.smtpUser || ""}
                 onChange={(e) => setFormData((p) => ({ ...p, smtpUser: e.target.value }))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 px-3 text-xs text-white outline-none focus:border-indigo-500"
+                className="w-full h-8 bg-background border border-input rounded-md px-2.5 text-xs text-foreground outline-none focus:border-primary"
               />
               <input
                 type="password"
                 placeholder="SMTP Password"
                 value={formData.smtpPass || ""}
                 onChange={(e) => setFormData((p) => ({ ...p, smtpPass: e.target.value }))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 px-3 text-xs text-white outline-none focus:border-indigo-500"
+                className="w-full h-8 bg-background border border-input rounded-md px-2.5 text-xs text-foreground outline-none focus:border-primary"
               />
             </div>
           </div>
 
           {/* Footer Controls */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              className="px-3.5 py-1.5 rounded-md bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-input text-xs font-semibold transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 flex items-center gap-2 transition disabled:opacity-50"
+              className="px-4 py-1.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold shadow-xs flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Saving Quotas...</span>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="size-3.5" />
                   <span>Update Quotas</span>
                 </>
               )}

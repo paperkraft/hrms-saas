@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { startImpersonation } from "@/actions/super-admin";
-import { ShieldAlert, Loader2, ExternalLink } from "lucide-react";
+import { ShieldAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export function ImpersonateQuickButton({
@@ -41,17 +41,17 @@ export function ImpersonateQuickButton({
     <button
       onClick={handleImpersonate}
       disabled={loading}
-      className={`inline-flex items-center gap-1.5 rounded-lg font-medium transition cursor-pointer disabled:opacity-50 ${
+      className={`inline-flex items-center gap-1 rounded-md font-semibold transition cursor-pointer disabled:opacity-50 ${
         size === "sm"
-          ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 text-xs"
-          : "bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white px-3.5 py-2 text-sm shadow-md"
+          ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/25 px-2 py-1 text-[11px]"
+          : "bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 text-xs shadow-xs"
       }`}
       title={`Impersonate Admin at /${tenantSlug}`}
     >
       {loading ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <Loader2 className="size-3 animate-spin" />
       ) : (
-        <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+        <ShieldAlert className="size-3 text-amber-600 dark:text-amber-400" />
       )}
       <span>Support Impersonate</span>
     </button>

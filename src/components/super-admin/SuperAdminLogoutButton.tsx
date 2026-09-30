@@ -48,15 +48,15 @@ export function SuperAdminLogoutButton({
       onClick={handleLogout}
       disabled={loading}
       title="Sign out of Platform Console"
-      className={`p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition flex items-center gap-2 cursor-pointer disabled:opacity-50 ${className}`}
+      className={`p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs ${className}`}
     >
       {loading ? (
-        <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+        <Loader2 className="size-3.5 animate-spin text-destructive" />
       ) : (
-        <LogOut className="w-4 h-4" />
+        <LogOut className="size-3.5" />
       )}
       {showLabel && (
-        <span className="text-xs font-medium">
+        <span className="text-xs font-semibold">
           {loading ? "Signing out..." : "Sign Out"}
         </span>
       )}
