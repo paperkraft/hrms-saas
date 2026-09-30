@@ -82,6 +82,8 @@ export async function getAdminDashboardStats(reqDate?: string) {
   const endOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
   const { start: weekStart, end: weekEnd } = getWeekRange();
 
+  const tenantId = session.user.tenantId;
+
   // Run all independent queries concurrently in parallel
   const [
     allPendingRequests,
@@ -98,12 +100,15 @@ export async function getAdminDashboardStats(reqDate?: string) {
     milestoneUsers
   ] = await Promise.all([
     prisma.leaveRequest.findMany({
-      where: { status: "PENDING" },
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        status: "PENDING"
+      },
       include: { user: true },
       orderBy: { createdAt: "asc" }
     }),
     prisma.user.findMany({
-      where: getPayrollEligibleUserWhere(),
+      where: getPayrollEligibleUserWhere(tenantId ? { tenantId } : {}),
       include: {
         department: true,
         roleDefinition: true,
@@ -119,10 +124,14 @@ export async function getAdminDashboardStats(reqDate?: string) {
       }
     }),
     prisma.attendance.findMany({
-      where: { date: { gte: startOfDay, lte: endOfDay } }
+      where: {
+        ...(tenantId ? { user: { tenantId } } : {}),
+        date: { gte: startOfDay, lte: endOfDay }
+      }
     }),
     prisma.leaveRequest.findMany({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         status: "APPROVED",
         startDate: { lte: startOfDay },
         endDate: { gte: startOfDay }
@@ -141,15 +150,17 @@ export async function getAdminDashboardStats(reqDate?: string) {
     }),
     prisma.attendance.findMany({
       where: {
+        ...(tenantId ? { user: { tenantId } } : {}),
         date: { gte: weekStart, lte: weekEnd },
         isOutsideOffice: false
       },
       select: { userId: true }
     }),
     prisma.location.findMany({
+      where: tenantId ? { tenantId } : {},
       include: {
         users: {
-          where: getPayrollEligibleUserWhere(),
+          where: getPayrollEligibleUserWhere(tenantId ? { tenantId } : {}),
           select: { id: true }
         }
       }
@@ -162,9 +173,9 @@ export async function getAdminDashboardStats(reqDate?: string) {
     getAllAnnouncementsForAdmin(),
     getNotifications(20),
     prisma.policy.findMany({
-      where: session.user.tenantId
+      where: tenantId
         ? {
-            OR: [{ tenantId: session.user.tenantId }, { tenantId: null }],
+            OR: [{ tenantId }, { tenantId: null }],
           }
         : undefined,
       take: 5,
@@ -173,7 +184,7 @@ export async function getAdminDashboardStats(reqDate?: string) {
     prisma.user.findMany({
       where: {
         status: "ACTIVE",
-        ...(session.user.tenantId ? { tenantId: session.user.tenantId } : {}),
+        ...(tenantId ? { tenantId } : {}),
         NOT: [
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
           { roleDefinition: { code: "SYSTEM_ADMIN" } }

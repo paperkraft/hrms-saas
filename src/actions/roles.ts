@@ -17,10 +17,13 @@ async function authorizeRoleManagement() {
 export async function getRoles() {
   try {
     const session = await getServerSession(authOptions)
-    if (!session) throw new Error("Unauthorized")
+    if (!session?.user?.id || !session.user.tenantId) throw new Error("Unauthorized")
+
+    const tenantId = session.user.tenantId
 
     const roles = await prisma.roleDefinition.findMany({
       where: {
+        tenantId,
         code: { not: 'SYSTEM_ADMIN' }
       },
       include: {
@@ -51,6 +54,11 @@ export async function createRole(data: {
 }) {
   try {
     await authorizeRoleManagement()
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.tenantId) {
+      return { success: false, error: "Tenant context is required." }
+    }
+    const tenantId = session.user.tenantId
 
     if (!data.name || !data.code) {
       return { success: false, error: "Role name and role code are required." }
@@ -58,9 +66,10 @@ export async function createRole(data: {
 
     const formattedCode = data.code.trim().toUpperCase().replace(/\s+/g, '_')
 
-    // Check if code or name already exists
+    // Check if code or name already exists in this tenant
     const existing = await prisma.roleDefinition.findFirst({
       where: {
+        tenantId,
         OR: [
           { code: formattedCode },
           { name: data.name.trim() }
@@ -69,7 +78,7 @@ export async function createRole(data: {
     })
 
     if (existing) {
-      return { success: false, error: "A role with this name or code already exists." }
+      return { success: false, error: "A role with this name or code already exists in this organization." }
     }
 
     const isExternalComputed = data.isExternal !== undefined 
@@ -78,6 +87,7 @@ export async function createRole(data: {
 
     const newRole = await prisma.roleDefinition.create({
       data: {
+        tenantId,
         name: data.name.trim(),
         code: formattedCode,
         description: data.description?.trim() || null,
@@ -119,9 +129,14 @@ export async function updateRole(
 ) {
   try {
     await authorizeRoleManagement()
+    const session = await getServerSession(authOptions)
+    const tenantId = session?.user?.tenantId
 
-    const existing = await prisma.roleDefinition.findUnique({
-      where: { id }
+    const existing = await prisma.roleDefinition.findFirst({
+      where: {
+        id,
+        ...(tenantId ? { tenantId } : {})
+      }
     })
 
     if (!existing) {
@@ -153,9 +168,14 @@ export async function updateRole(
 export async function deleteRole(id: string, fallbackRoleId?: string) {
   try {
     await authorizeRoleManagement()
+    const session = await getServerSession(authOptions)
+    const tenantId = session?.user?.tenantId
 
-    const role = await prisma.roleDefinition.findUnique({
-      where: { id },
+    const role = await prisma.roleDefinition.findFirst({
+      where: {
+        id,
+        ...(tenantId ? { tenantId } : {})
+      },
       include: {
         _count: { select: { users: true } }
       }

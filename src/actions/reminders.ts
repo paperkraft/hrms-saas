@@ -10,58 +10,71 @@ export async function processReminders() {
   if (now.getDay() === 0) return 0;
 
   const { start, end } = getTodayRange();
-  
-  const [holiday, config] = await Promise.all([
-    prisma.publicHoliday.findFirst({
-      where: { date: { gte: start, lte: end } }
-    }),
-    prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } })
-  ]);
-  
-  if (holiday) return 0;
 
   // Stage 1: Before 10 minutes
   const beforeTime = addMinutes(now, 10);
   const beforeTimeStr = format(beforeTime, "HH:mm");
-  
+
   // Stage 2: After 5 minutes (Late/Forgot)
   const afterTime = addMinutes(now, -5);
   const afterTimeStr = format(afterTime, "HH:mm");
-  
-  const globalStart = config?.defaultOfficeStartTime || "09:00";
-  const globalEnd = config?.defaultOfficeEndTime || "18:00";
 
-  const orConditions: any[] = [
-    { location: { startTime: { in: [beforeTimeStr, afterTimeStr] } } },
-    { location: { endTime: { in: [beforeTimeStr, afterTimeStr] } } }
-  ];
-
-  if ([beforeTimeStr, afterTimeStr].includes(globalStart) || [beforeTimeStr, afterTimeStr].includes(globalEnd)) {
-    orConditions.push({ locationId: null });
-  }
-
-  // Find users matching exactly this window (excluding external users and admins)
-  const candidates = await prisma.user.findMany({
-    where: getPayrollEligibleUserWhere({
-      isExternal: false,
-      role: { not: "ADMIN" },
-      OR: orConditions
-    }),
-    include: {
-      roleDefinition: true,
-      location: true,
-      attendances: { where: { date: { gte: start, lte: end } } },
-      leaveRequests: { where: { status: "APPROVED", startDate: { lte: end }, endDate: { gte: start } } },
-      notifications: { 
-        where: { 
-          createdAt: { gte: start, lte: end },
-          title: { in: ["Check-in Reminder", "Late Check-in Alert", "Check-out Reminder", "Check-out Warning"] }
-        }
-      }
-    }
+  // Fetch all active tenants
+  const tenants = await prisma.tenant.findMany({
+    where: { status: "ACTIVE" },
+    select: { id: true }
   });
 
   let reminderCount = 0;
+
+  for (const tenant of tenants) {
+    const tenantId = tenant.id;
+
+    const [holiday, config] = await Promise.all([
+      prisma.publicHoliday.findFirst({
+        where: {
+          OR: [{ tenantId }, { tenantId: null }],
+          date: { gte: start, lte: end }
+        }
+      }),
+      prisma.systemConfig.findUnique({ where: { tenantId } })
+    ]);
+
+    if (holiday) continue;
+
+    const globalStart = config?.defaultOfficeStartTime || "09:00";
+    const globalEnd = config?.defaultOfficeEndTime || "18:00";
+
+    const orConditions: any[] = [
+      { location: { startTime: { in: [beforeTimeStr, afterTimeStr] } } },
+      { location: { endTime: { in: [beforeTimeStr, afterTimeStr] } } }
+    ];
+
+    if ([beforeTimeStr, afterTimeStr].includes(globalStart) || [beforeTimeStr, afterTimeStr].includes(globalEnd)) {
+      orConditions.push({ locationId: null });
+    }
+
+    // Find users matching exactly this window within this tenant
+    const candidates = await prisma.user.findMany({
+      where: getPayrollEligibleUserWhere({
+        tenantId,
+        isExternal: false,
+        role: { not: "ADMIN" },
+        OR: orConditions
+      }),
+      include: {
+        roleDefinition: true,
+        location: true,
+        attendances: { where: { date: { gte: start, lte: end } } },
+        leaveRequests: { where: { status: "APPROVED", startDate: { lte: end }, endDate: { gte: start } } },
+        notifications: {
+          where: {
+            createdAt: { gte: start, lte: end },
+            title: { in: ["Check-in Reminder", "Late Check-in Alert", "Check-out Reminder", "Check-out Warning"] }
+          }
+        }
+      }
+    });
 
   for (const user of candidates) {
     if (
@@ -141,6 +154,7 @@ export async function processReminders() {
       }
     }
   }
+}
 
   return reminderCount;
 }

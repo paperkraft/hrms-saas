@@ -72,10 +72,13 @@ export async function punchInOutAction(coords?: { lat: number; lng: number; accu
     }
 
     // Fallback: If user has no explicit locations assigned and is on-site/hybrid,
-    // check against all non-remote locations configured in the system
+    // check against all non-remote locations configured in the system for this tenant
     if (allowedLocations.length === 0 && user.workMode !== "REMOTE") {
       const allLocations = await prisma.location.findMany({
-        where: { isRemote: false }
+        where: {
+          isRemote: false,
+          ...(user.tenantId ? { tenantId: user.tenantId } : {})
+        }
       });
       if (allLocations.length > 0) {
         allowedLocations = allLocations;
@@ -412,21 +415,26 @@ export async function revertPunchOutAction(attendanceId: string) {
 
 export async function getLocationLogsAction(reqMonth?: number, reqYear?: number, reqDate?: string) {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const now = new Date();
     const currentYear = reqYear || now.getUTCFullYear();
     const currentMonth = reqMonth || now.getUTCMonth() + 1;
 
-    let whereClause: any = {};
+    let whereClause: any = {
+      ...(tenantId ? { tenantId } : {})
+    };
 
     if (reqDate) {
       const [y, m, d] = reqDate.split('-').map(Number);
       const startOfDay = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
       const endOfDay = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
-      whereClause = { date: { gte: startOfDay, lte: endOfDay } };
+      whereClause.date = { gte: startOfDay, lte: endOfDay };
     } else {
       const startOfMonth = new Date(Date.UTC(currentYear, currentMonth - 1, 1, 0, 0, 0, 0));
       const endOfMonth = new Date(Date.UTC(currentYear, currentMonth, 0, 23, 59, 59, 999));
-      whereClause = { date: { gte: startOfMonth, lte: endOfMonth } };
+      whereClause.date = { gte: startOfMonth, lte: endOfMonth };
     }
 
     const attendances = await prisma.attendance.findMany({

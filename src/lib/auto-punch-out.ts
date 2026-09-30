@@ -55,14 +55,12 @@ export async function processAllAutoPunchOuts() {
  * Shared internal logic for processing a list of forgotten punch-outs.
  */
 async function executeAutoPunchOuts(records: any[]) {
-  const config = await prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } }) as any;
-
-  // Policy Toggle: Auto Punch-Out
-  if (config && !config.autoPunchOutEnabled) return 0;
-
-  const globalEndTime = config?.officeEndTime || "18:00";
-  const delayHours = config?.autoPunchOutDelayHours ?? 2;
-  const globalSecondHalfStartTime = config?.secondHalfStartTime || "13:30";
+  // Pre-fetch system config for all tenants in these records
+  const tenantIds = Array.from(new Set(records.map(r => r.tenantId || r.user?.tenantId).filter(Boolean)));
+  const configs = await prisma.systemConfig.findMany({
+    where: { tenantId: { in: tenantIds } }
+  });
+  const configMap = new Map(configs.map(c => [c.tenantId, c as any]));
 
   // Pre-fetch relevant leaves to handle custom auto punch-out times for HALF/SHORT leaves
   const userIds = Array.from(new Set(records.map(r => r.userId as string)));
@@ -86,6 +84,15 @@ async function executeAutoPunchOuts(records: any[]) {
   let totalProcessed = 0;
 
   for (const record of records) {
+    const recordTenantId = record.tenantId || record.user?.tenantId;
+    const config = recordTenantId ? configMap.get(recordTenantId) : null;
+
+    if (config && !config.autoPunchOutEnabled) continue;
+
+    const globalEndTime = config?.defaultOfficeEndTime || "18:00";
+    const delayHours = config?.autoPunchOutDelayHours ?? 2;
+    const globalSecondHalfStartTime = config?.secondHalfStartTime || "13:30";
+
     const shiftEndTime = record.user.location?.endTime || globalEndTime;
 
     // Find matching leave for this record's date

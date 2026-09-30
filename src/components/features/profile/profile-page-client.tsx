@@ -38,6 +38,7 @@ import {
   Loader2,
   Camera,
   Eye,
+  EyeOff,
   MapPin,
   Building2,
   ShieldCheck,
@@ -144,6 +145,7 @@ export function ProfilePageClient({ user, completionPct }: ProfilePageClientProp
   const [activeTab, setActiveTab] = useState<"personal" | "emergency" | "security">("personal");
   const [avatar, setAvatar] = useState<string | null>((user as any).avatarUrl || null);
   const [uploading, setUploading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Append timestamp on client-side only to bust cache and avoid Hydration Mismatch
   useEffect(() => {
@@ -760,12 +762,27 @@ export function ProfilePageClient({ user, completionPct }: ProfilePageClientProp
                             <Lock className="size-3.5 text-muted-foreground" /> New Password
                           </FormLabel>
                           <FormControl>
-                            <Input
-                              type="password"
-                              {...field}
-                              placeholder="Minimum 6 characters"
-                              className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20"
-                            />
+                            <div className="relative">
+                              <Input
+                                type={showPassword ? "text" : "password"}
+                                {...field}
+                                placeholder="Minimum 6 characters"
+                                className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20 pr-10"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword((prev) => !prev)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none p-0.5 rounded cursor-pointer"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                tabIndex={-1}
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="size-4" />
+                                ) : (
+                                  <Eye className="size-4" />
+                                )}
+                              </button>
+                            </div>
                           </FormControl>
                           <FormMessage className="text-xs font-medium" />
                         </FormItem>

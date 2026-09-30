@@ -7,7 +7,7 @@ import { loginSchema, type LoginValues } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Loader2, Lock, Download, Smartphone } from "lucide-react";
+import { AlertCircle, Loader2, Lock, Download, Smartphone, Eye, EyeOff } from "lucide-react";
 import { signIn, getSession } from "next-auth/react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
@@ -22,9 +22,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export function LoginForm() {
+interface LoginFormProps {
+  tenantSlug?: string;
+}
+
+export function LoginForm({ tenantSlug }: LoginFormProps = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const { installPrompt, isStandalone, isIOS, handleInstallClick } = usePWAInstall();
 
   const {
@@ -48,6 +53,7 @@ export function LoginForm() {
       const result = await signIn("credentials", {
         email: data.email,
         password: data.password,
+        tenantSlug: tenantSlug || undefined,
         redirect: false,
       });
 
@@ -104,13 +110,28 @@ export function LoginForm() {
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input 
-              id="password" 
-              type="password" 
-              {...register("password")} 
-              disabled={isLoading}
-              className={errors.password ? "border-destructive focus-visible:ring-destructive" : ""}
-            />
+            <div className="relative">
+              <Input 
+                id="password" 
+                type={showPassword ? "text" : "password"} 
+                {...register("password")} 
+                disabled={isLoading}
+                className={`pr-10 ${errors.password ? "border-destructive focus-visible:ring-destructive" : ""}`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none p-0.5 rounded cursor-pointer"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+              </button>
+            </div>
             {errors.password && (
               <p className="text-sm text-destructive font-medium">{errors.password.message}</p>
             )}

@@ -137,8 +137,14 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
   const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
   const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
+  const tenantId = session.user.tenantId;
+
   const existingBalances = await prisma.leaveBalance.findMany({
-    where: { month: currentMonth, year: currentYear },
+    where: {
+      ...(tenantId ? { tenantId } : {}),
+      month: currentMonth,
+      year: currentYear
+    },
     select: { userId: true }
   });
   const existingUserIds = new Set(existingBalances.map(b => b.userId));
@@ -146,6 +152,7 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
   const usersMissingBalance = await prisma.user.findMany({
     where: getPayrollEligibleUserWhere(
       {
+        ...(tenantId ? { tenantId } : {}),
         createdAt: { lte: endOfRange },
         id: { notIn: Array.from(existingUserIds) },
       },
@@ -155,12 +162,13 @@ export async function getAccountantDashboardStats(reqMonth?: number, reqYear?: n
   });
 
   if (usersMissingBalance.length > 0) {
-    await Promise.all(usersMissingBalance.map(u => ensureBalance(u.id, currentMonth, currentYear)));
+    await Promise.all(usersMissingBalance.map(u => ensureBalance(u.id, currentMonth, currentYear, undefined, tenantId)));
   }
 
   const users = await prisma.user.findMany({
     where: getPayrollEligibleUserWhere(
       {
+        ...(tenantId ? { tenantId } : {}),
         createdAt: { lte: endOfRange },
       },
       { includePastPersonnel: true, dateRange: { start: startOfRange, end: endOfRange } }

@@ -11,11 +11,13 @@ import { getSession, isTLorManager, calculateWorkload } from "./core";
 export async function getMyPendingTasks() {
   try {
     const session = await getSession()
+    const tenantId = session.user.tenantId
 
     const tasks = await prisma.task.findMany({
       where: {
         assignedToId: session.user.id,
-        lifecycleStatus: { in: ["PROPOSED", "NEGOTIATING"] }
+        lifecycleStatus: { in: ["PROPOSED", "NEGOTIATING"] },
+        ...(tenantId ? { tenantId } : {})
       },
       include: {
         project: { select: { id: true, name: true } },
@@ -46,22 +48,30 @@ export async function getMyPendingTasks() {
 export async function getProposedTasksForManager() {
   try {
     const session = await getSession()
+    const tenantId = session.user.tenantId
     const canView = await isTLorManager(session.user.id, session.user.role)
     if (!canView) throw new Error("Access Denied")
 
     const isAdmin = isManagerOrAdmin(session.user.role)
 
     let whereClause: any = {
-      lifecycleStatus: { in: ["PROPOSED", "NEGOTIATING"] }
+      lifecycleStatus: { in: ["PROPOSED", "NEGOTIATING"] },
+      ...(tenantId ? { tenantId } : {})
     }
 
     if (!isAdmin) {
       // TL only sees their dept / subordinates
-      const deptLed = await prisma.department.findFirst({ where: { teamLeaderId: session.user.id } })
+      const deptLed = await prisma.department.findFirst({
+        where: {
+          teamLeaderId: session.user.id,
+          ...(tenantId ? { tenantId } : {})
+        }
+      })
       const ledDeptId = deptLed?.id
 
       whereClause = {
         lifecycleStatus: { in: ["PROPOSED", "NEGOTIATING"] },
+        ...(tenantId ? { tenantId } : {}),
         OR: [
           { proposedById: session.user.id },
           { createdById: session.user.id },

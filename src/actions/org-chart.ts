@@ -3,6 +3,8 @@
 import prisma from "@/lib/prisma"
 import { Role } from "@prisma/client"
 import { appConfig } from "@/lib/app-config"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
 export type OrgUser = {
   id: string
@@ -85,9 +87,13 @@ export type OrgData = {
 }
 
 export async function getOrgData(): Promise<OrgData> {
+  const session = await getServerSession(authOptions)
+  const tenantId = session?.user?.tenantId
+
   const [users, departments] = await Promise.all([
     prisma.user.findMany({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         status: { notIn: ['RESIGNED', 'TERMINATED'] },
         NOT: [
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
@@ -152,6 +158,7 @@ export async function getOrgData(): Promise<OrgData> {
       orderBy: { name: 'asc' }
     }),
     prisma.department.findMany({
+      where: tenantId ? { tenantId } : {},
       include: {
         teamLeader: {
           select: {

@@ -28,9 +28,12 @@ export async function getCalendarEvents(month?: number, year?: number) {
 
     console.log(`[Calendar] Fetching for User: ${currentUserId}, Role: ${currentUserRole}`);
 
-    // Fetch Public Holidays (Global for the current target year)
+    const tenantId = session.user.tenantId;
+
+    // Fetch Public Holidays (Scoped for tenant and the target year)
     const holidays = await prisma.publicHoliday.findMany({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         date: {
           gte: yearStart,
           lte: yearEnd,
@@ -39,6 +42,7 @@ export async function getCalendarEvents(month?: number, year?: number) {
     });
 
     const nonDevUserFilter = {
+      ...(tenantId ? { tenantId } : {}),
       status: "ACTIVE" as const,
       NOT: [
         { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },

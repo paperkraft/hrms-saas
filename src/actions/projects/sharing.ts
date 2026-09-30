@@ -77,11 +77,14 @@ export async function getProjectShares(projectId: string) {
  */
 export async function getShareableUsers(projectId: string) {
   try {
-    await authorizeProjectLead()
+    const session = await authorizeProjectLead()
 
     const [allUsers, currentShares] = await Promise.all([
       prisma.user.findMany({
-        where: { status: "ACTIVE" },
+        where: {
+          ...(session.user.tenantId ? { tenantId: session.user.tenantId } : {}),
+          status: "ACTIVE"
+        },
         select: {
           id: true,
           name: true,

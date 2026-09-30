@@ -55,6 +55,8 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
   const startOfThisYear = new Date(Date.UTC(currentYear, 0, 1, 0, 0, 0, 0));
   const endOfThisYear = new Date(Date.UTC(currentYear, 11, 31, 23, 59, 59, 999));
 
+  const tenantId = session.user.tenantId;
+
   // 1. Fetch Attendance Records for the entire year
   const attendanceRecords = await prisma.attendance.findMany({
     where: {
@@ -63,6 +65,7 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
         lte: endOfThisYear,
       },
       user: {
+        ...(tenantId ? { tenantId } : {}),
         role: {
           not: "ADMIN"
         }
@@ -72,12 +75,13 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
 
   // 2. Fetch Active Users Count (Synchronized with Admin Dashboard)
   const totalEmployees = await prisma.user.count({
-    where: getPayrollEligibleUserWhere(),
+    where: getPayrollEligibleUserWhere(tenantId ? { tenantId } : {}),
   });
 
   // 3. Fetch all tasks created in the selected year
   const tasksForPerformance = await prisma.task.findMany({
     where: {
+      ...(tenantId ? { project: { tenantId } } : {}),
       OR: [
         {
           plannedEnd: {
@@ -119,6 +123,7 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
   // Fetch eligible active workforce employees dynamically for performance evaluations
   const employees = await prisma.user.findMany({
     where: getPayrollEligibleUserWhere({
+      ...(tenantId ? { tenantId } : {}),
       status: "ACTIVE"
     }),
     include: {
@@ -128,6 +133,7 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
 
   // Fetch departments with their team leaders
   const depts = await prisma.department.findMany({
+    where: tenantId ? { tenantId } : {},
     include: {
       teamLeader: {
         select: {
@@ -167,6 +173,7 @@ export async function getAdminYearlyReportsData(reqYear?: number) {
   // ═══════════════════════════════════════════════════════════════════════════
   const historicalRatedTasks = await prisma.task.findMany({
     where: {
+      ...(tenantId ? { project: { tenantId } } : {}),
       status: { in: ["COMPLETED", "IN_REVIEW"] },
       OR: [
         { subTlRating: { not: null } },

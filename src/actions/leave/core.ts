@@ -20,8 +20,14 @@ export async function getCyclePendingDays(userId: string, cycleStart: Date, cycl
     }
   });
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tenantId: true }
+  });
+
   const holidays = await prisma.publicHoliday.findMany({
     where: {
+      ...(user?.tenantId ? { OR: [{ tenantId: user.tenantId }, { tenantId: null }] } : {}),
       date: { gte: cycleStart, lte: cycleEnd }
     }
   });
@@ -216,6 +222,7 @@ export async function processLeaveRequestStatus(requestId: string, status: "APPR
   // Fetch public holidays in range
   const holidays = await prisma.publicHoliday.findMany({
     where: {
+      ...(requestMeta.tenantId ? { OR: [{ tenantId: requestMeta.tenantId }, { tenantId: null }] } : {}),
       date: {
         gte: new Date(requestMeta.startDate.getFullYear(), requestMeta.startDate.getMonth(), 1),
         lte: new Date(requestMeta.endDate.getFullYear(), requestMeta.endDate.getMonth() + 1, 0, 23, 59, 59)
@@ -227,7 +234,7 @@ export async function processLeaveRequestStatus(requestId: string, status: "APPR
   // Ensure balance record exists for all months covered by the leave
   const leaveMonths = splitLeaveIntoMonths(requestMeta.startDate, requestMeta.endDate, holidayDates);
   for (const m of leaveMonths) {
-    await ensureBalance(requestMeta.userId, m.month, m.year);
+    await ensureBalance(requestMeta.userId, m.month, m.year, undefined, requestMeta.tenantId);
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -315,7 +322,10 @@ export async function processLeaveRequestStatus(requestId: string, status: "APPR
     });
 
     // Cascade updates for all subsequent months
-    const config = await tx.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } });
+    const tenantIdForConfig = txRequest.tenantId || (requestMeta.user as any)?.tenantId;
+    const config = tenantIdForConfig
+      ? await tx.systemConfig.findUnique({ where: { tenantId: tenantIdForConfig } })
+      : null;
     const startMonthConfig = (config as any)?.semiAnnualCycleStartMonth ?? 0;
 
     const firstMonth = monthParts[0];

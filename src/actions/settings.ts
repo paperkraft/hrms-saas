@@ -131,7 +131,11 @@ export async function updateSystemConfig(data: {
 
 // New action to manage locations
 export async function getLocations() {
+  const session = await getServerSession(authOptions)
+  const tenantId = session?.user?.tenantId
+
   return prisma.location.findMany({
+    where: tenantId ? { tenantId } : {},
     orderBy: { name: 'asc' }
   })
 }

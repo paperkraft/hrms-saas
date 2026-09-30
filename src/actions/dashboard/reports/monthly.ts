@@ -65,6 +65,9 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
   const fourteenDaysAgo = subDays(startOfDay(referenceDate), 14);
   const thirtyDaysAgo = subDays(startOfDay(referenceDate), 30);
 
+  const session = await getServerSession(authOptions);
+  const tenantId = session?.user?.tenantId;
+
   // 1. Fetch Attendance Records for the last 30 days
   const attendanceRecords = await prisma.attendance.findMany({
     where: {
@@ -73,6 +76,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
         lte: referenceDate,
       },
       user: {
+        ...(tenantId ? { tenantId } : {}),
         role: {
           not: "ADMIN"
         }
@@ -98,7 +102,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
 
   // 2. Fetch Active Users Count (Synchronized with Admin Dashboard)
   const totalEmployees = await prisma.user.count({
-    where: getPayrollEligibleUserWhere(),
+    where: getPayrollEligibleUserWhere(tenantId ? { tenantId } : {}),
   });
 
   // 3. Daily Attendance Trends (Last 30 days)
@@ -151,6 +155,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
   // 5. Leave Request status & categories (this month)
   const leaveRequests = await prisma.leaveRequest.findMany({
     where: {
+      ...(tenantId ? { tenantId } : {}),
       startDate: {
         gte: startOfThisMonth,
         lte: endOfThisMonth,
@@ -177,6 +182,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
 
   // 6. Project & Task Health Metrics
   const projects = await prisma.project.findMany({
+    where: tenantId ? { tenantId } : {},
     select: {
       id: true,
       name: true,
@@ -324,6 +330,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
   // Fetch tasks with assignee and activity logs for submission tracking (filtered by current calendar month)
   const tasksForPerformance = await prisma.task.findMany({
     where: {
+      ...(tenantId ? { project: { tenantId } } : {}),
       OR: [
         {
           plannedEnd: {
@@ -368,7 +375,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
   // Fetch eligible workforce employees dynamically for performance evaluation rankings
   // (Includes backdated personnel who were active or present during the evaluated month, while excluding inactive/resigned users with no attendance)
   const employees = await prisma.user.findMany({
-    where: getPayrollEligibleUserWhere(undefined, {
+    where: getPayrollEligibleUserWhere(tenantId ? { tenantId } : undefined, {
       includePastPersonnel: true,
       dateRange: {
         start: startOfThisMonth,
@@ -382,6 +389,7 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
 
   // Fetch departments with their team leaders
   const depts = await prisma.department.findMany({
+    where: tenantId ? { tenantId } : {},
     include: {
       teamLeader: {
         select: {
@@ -402,9 +410,10 @@ export async function getAdminReportsData(reqMonth?: number, reqYear?: number, b
   // 4-PILLAR FAIR PERFORMANCE SYSTEM
   // Pillars: Productivity (30%) | Timeliness (25%) | Quality (25%) | Discipline (20%)
   // ═══════════════════════════════════════════════════════════════════════════
-  // Fetch historical averages for all users across the DB
+  // Fetch historical averages for users
   const historicalRatedTasks = await prisma.task.findMany({
     where: {
+      ...(tenantId ? { project: { tenantId } } : {}),
       status: { in: ["COMPLETED", "IN_REVIEW"] },
       OR: [
         { subTlRating: { not: null } },

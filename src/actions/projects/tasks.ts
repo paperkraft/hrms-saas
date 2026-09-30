@@ -1176,8 +1176,9 @@ export async function getLatestTask(taskId: string) {
 
 export async function getAllTasksForMention() {
   try {
-    await getSession()
+    const session = await getSession()
     const tasks = await prisma.task.findMany({
+      where: session.user.tenantId ? { project: { tenantId: session.user.tenantId } } : {},
       select: {
         id: true,
         name: true,
@@ -1194,9 +1195,10 @@ export async function getAllTasksForMention() {
 
 export async function getPerformanceData() {
   try {
-    await authorizeProjectManager()
+    const session = await authorizeProjectManager()
 
     const projects = await prisma.project.findMany({
+      where: session.user.tenantId ? { tenantId: session.user.tenantId } : {},
       include: {
         tasks: {
           select: { status: true, assignedToId: true, assignedTo: { select: { name: true } } }

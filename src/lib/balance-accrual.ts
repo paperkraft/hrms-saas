@@ -130,19 +130,22 @@ export async function generateAllMonthlyBalances() {
     where: {
       status: "ACTIVE"
     },
-    select: { id: true }
+    select: { id: true, tenantId: true }
   });
 
-  const config = await prisma.systemConfig.findUnique({
-    where: { id: "GLOBAL_CONFIG" }
+  const tenantIds = Array.from(new Set(users.map(u => u.tenantId).filter(Boolean)));
+  const configs = await prisma.systemConfig.findMany({
+    where: { tenantId: { in: tenantIds } }
   });
-  const startMonth = (config as any)?.semiAnnualCycleStartMonth ?? 4;
+  const configMap = new Map(configs.map(c => [c.tenantId, c]));
 
   let processedCount = 0;
   for (const user of users) {
     try {
+      const config = configMap.get(user.tenantId);
+      const startMonth = (config as any)?.semiAnnualCycleStartMonth ?? 4;
       // Ensure current month exists
-      await ensureBalance(user.id, currentMonth, currentYear, startMonth);
+      await ensureBalance(user.id, currentMonth, currentYear, startMonth, user.tenantId);
 
       processedCount++;
     } catch (error) {

@@ -12,8 +12,10 @@ export async function getSalaryStructures() {
     throw new Error("Unauthorized");
   }
 
+  const tenantId = session.user.tenantId;
+
   const structures = await prisma.user.findMany({
-    where: getPayrollEligibleUserWhere(undefined, { includePastPersonnel: true }),
+    where: getPayrollEligibleUserWhere(tenantId ? { tenantId } : undefined, { includePastPersonnel: true }),
     select: {
       id: true,
       name: true,
@@ -38,6 +40,7 @@ export async function updateSalaryStructure(userId: string, data: any) {
     throw new Error("Unauthorized");
   }
 
+  const tenantId = session.user.tenantId;
   const { id, employeeCode, gender, ...updateData } = data;
 
   // Update user profile fields if provided
@@ -54,7 +57,7 @@ export async function updateSalaryStructure(userId: string, data: any) {
   const structure = await prisma.salaryStructure.upsert({
     where: { userId },
     update: updateData,
-    create: { ...updateData, userId },
+    create: { ...updateData, userId, tenantId: tenantId! },
   });
 
   return { success: true, data: structure };

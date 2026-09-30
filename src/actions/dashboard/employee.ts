@@ -244,7 +244,15 @@ export async function getEmployeeDashboardStats() {
     getUpcomingHolidays(10),
     getAnnouncements(user.departmentId || undefined),
     getNotifications(20),
-    prisma.policy.findMany({ take: 5, orderBy: { order: 'asc' } }),
+    prisma.policy.findMany({
+      where: user.tenantId
+        ? {
+            OR: [{ tenantId: user.tenantId }, { tenantId: null }],
+          }
+        : undefined,
+      take: 5,
+      orderBy: { order: "asc" }
+    }),
     prisma.todo.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" }
@@ -260,7 +268,10 @@ export async function getEmployeeDashboardStats() {
     prisma.attendance.findMany({
       where: {
         date: { gte: startOfThisMonth, lte: endOfThisMonth },
-        user: { role: { not: "ADMIN" } }
+        user: {
+          ...(user.tenantId ? { tenantId: user.tenantId } : {}),
+          role: { not: "ADMIN" }
+        }
       },
       select: {
         isLate: true,

@@ -94,7 +94,11 @@ export default async function ProjectDetailPage({
       }
     }),
     prisma.user.findMany({
-      where: { managerId: session.user.id, status: "ACTIVE" },
+      where: {
+        ...(session.user.tenantId ? { tenantId: session.user.tenantId } : {}),
+        managerId: session.user.id,
+        status: "ACTIVE"
+      },
       select: { id: true, name: true, email: true, departmentId: true }
     }),
     prisma.user.findUnique({
@@ -143,7 +147,10 @@ export default async function ProjectDetailPage({
   const ledDepartmentIds = Array.from(ledDepartmentIdsSet)
 
   const rawUsers = await prisma.user.findMany({
-    where: { status: "ACTIVE" },
+    where: {
+      ...(session.user.tenantId ? { tenantId: session.user.tenantId } : {}),
+      status: "ACTIVE"
+    },
     select: { id: true, name: true, email: true, departmentId: true, role: true, ledDepartments: { select: { id: true } } }
   })
 

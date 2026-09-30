@@ -16,7 +16,11 @@ async function authorizePolicyManagement() {
 
 export async function getPolicies() {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const policies = await prisma.policy.findMany({
+      where: tenantId ? { tenantId } : {},
       orderBy: { order: "asc" }
     });
     return { success: true, data: policies };
@@ -36,8 +40,13 @@ export async function createPolicy(data: {
 }) {
   try {
     await authorizePolicyManagement();
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+    if (!tenantId) return { success: false, error: "Tenant context required." };
+
     const policy = await prisma.policy.create({
       data: {
+        tenantId,
         ...data,
         order: data.order || 0
       }
@@ -60,6 +69,17 @@ export async function updatePolicy(id: string, data: Partial<{
 }>) {
   try {
     await authorizePolicyManagement();
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
+    const existing = await prisma.policy.findFirst({
+      where: {
+        id,
+        ...(tenantId ? { tenantId } : {})
+      }
+    });
+    if (!existing) return { success: false, error: "Policy not found." };
+
     const policy = await prisma.policy.update({
       where: { id },
       data
@@ -74,6 +94,17 @@ export async function updatePolicy(id: string, data: Partial<{
 export async function deletePolicy(id: string) {
   try {
     await authorizePolicyManagement();
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
+    const existing = await prisma.policy.findFirst({
+      where: {
+        id,
+        ...(tenantId ? { tenantId } : {})
+      }
+    });
+    if (!existing) return { success: false, error: "Policy not found." };
+
     await prisma.policy.delete({
       where: { id }
     });

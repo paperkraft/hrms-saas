@@ -21,10 +21,15 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
     const startOfRange = new Date(Date.UTC(currentYear, currentMonth - 1, 1, 0, 0, 0, 0));
     const endOfRange = new Date(Date.UTC(currentYear, currentMonth, 0, 23, 59, 59, 999));
 
+    const tenantId = session.user.tenantId;
+
     // Get all eligible employees dynamically (including past personnel who worked in this period)
     const users = await prisma.user.findMany({
         where: getPayrollEligibleUserWhere(
-            { createdAt: { lte: endOfRange } },
+            {
+                ...(tenantId ? { tenantId } : {}),
+                createdAt: { lte: endOfRange }
+            },
             { includePastPersonnel: true, dateRange: { start: startOfRange, end: endOfRange } }
         ),
         select: {
@@ -41,6 +46,7 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
     // Get all attendances for the month
     const attendances = await prisma.attendance.findMany({
         where: {
+            ...(tenantId ? { user: { tenantId } } : {}),
             date: { gte: startOfRange, lte: endOfRange }
         },
         select: {
@@ -60,7 +66,7 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
     // Get all allowances for the month
     const allowances = await prisma.allowance.findMany({
         where: {
-            tenantId: session.user.tenantId,
+            ...(tenantId ? { tenantId } : {}),
             date: { gte: startOfRange, lte: endOfRange },
         },
         select: {
@@ -75,6 +81,7 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
     // Get all approved leaves for the month
     const leaves = await prisma.leaveRequest.findMany({
         where: {
+            ...(tenantId ? { tenantId } : {}),
             status: "APPROVED",
             OR: [
                 { startDate: { gte: startOfRange, lte: endOfRange } },
@@ -98,6 +105,7 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
     // Get approved overtime requests for the month
     const overtimes = await prisma.overtimeRequest.findMany({
         where: {
+            ...(tenantId ? { tenantId } : {}),
             status: "APPROVED",
             date: { gte: startOfRange, lte: endOfRange }
         },
@@ -144,7 +152,7 @@ export async function getAttendanceLedgerData(reqMonth?: number, reqYear?: numbe
     });
 
     // Get system config for shift info
-    const config = await prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } });
+    const config = tenantId ? await prisma.systemConfig.findUnique({ where: { tenantId } }) : null;
 
     // Build the ledger data
     const ledgerData = users.map(user => {

@@ -23,7 +23,8 @@ export const authOptions: NextAuthOptions = {
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
+        tenantSlug: { label: "Tenant Slug", type: "text" }
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -31,9 +32,12 @@ export const authOptions: NextAuthOptions = {
         }
 
         const cleanEmail = credentials.email.toLowerCase().trim();
+        const tenantSlug = (credentials as any)?.tenantSlug?.toLowerCase()?.trim();
+
         let user = await prisma.user.findFirst({
           where: {
-            email: { equals: cleanEmail, mode: "insensitive" }
+            email: { equals: cleanEmail, mode: "insensitive" },
+            ...(tenantSlug ? { tenant: { slug: tenantSlug } } : {})
           },
           include: {
             tenant: { select: { id: true, slug: true, name: true } },

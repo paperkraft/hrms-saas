@@ -44,9 +44,13 @@ export async function GET(req: NextRequest) {
     }
     try {
       const { start, end } = getTodayRange();
+      const tenantId = session.user.tenantId;
       const [notifications, user, config, todaysLog] = await Promise.all([
         prisma.notification.findMany({
-          where: { userId },
+          where: {
+            userId,
+            ...(tenantId ? { tenantId } : {})
+          },
           orderBy: { createdAt: "desc" },
           take: 10,
         }),
@@ -54,9 +58,13 @@ export async function GET(req: NextRequest) {
           where: { id: userId },
           include: { location: true }
         }),
-        prisma.systemConfig.findUnique({ where: { id: "GLOBAL_CONFIG" } }),
+        tenantId ? prisma.systemConfig.findUnique({ where: { tenantId } }) : null,
         prisma.attendance.findFirst({
-          where: { userId: userId, date: { gte: start, lte: end } }
+          where: {
+            userId: userId,
+            ...(tenantId ? { tenantId } : {}),
+            date: { gte: start, lte: end }
+          }
         })
       ]);
 

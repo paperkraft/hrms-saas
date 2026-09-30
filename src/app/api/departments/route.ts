@@ -8,7 +8,10 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const tenantId = session.user.tenantId;
+
     const departments = await prisma.department.findMany({
+      where: tenantId ? { tenantId } : {},
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     });

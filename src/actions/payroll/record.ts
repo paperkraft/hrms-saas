@@ -94,11 +94,15 @@ export async function getPayrollRecords(month: number, year: number) {
     throw new Error("Unauthorized");
   }
 
+  const tenantId = session.user.tenantId;
+
   const records = await prisma.payrollRecord.findMany({
     where: {
+      ...(tenantId ? { tenantId } : {}),
       month,
       year,
       user: {
+        ...(tenantId ? { tenantId } : {}),
         NOT: [
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },
           { roleDefinition: { code: "SYSTEM_ADMIN" } }
@@ -138,6 +142,8 @@ export async function generateMonthlyPayroll(month: number, year: number, forceR
     throw new Error("Unauthorized");
   }
 
+  const tenantId = session.user.tenantId;
+
   const dashboardStats = await getAccountantDashboardStats(month, year);
   if (!dashboardStats.success || !dashboardStats.data) {
     throw new Error("Failed to fetch dashboard stats");
@@ -150,7 +156,10 @@ export async function generateMonthlyPayroll(month: number, year: number, forceR
 
   const users = await prisma.user.findMany({
     where: getPayrollEligibleUserWhere(
-      targetUserId ? { id: targetUserId } : undefined,
+      {
+        ...(tenantId ? { tenantId } : {}),
+        ...(targetUserId ? { id: targetUserId } : {}),
+      },
       { includePastPersonnel: true, dateRange: { start: startOfRange, end: endOfRange } }
     ),
     include: {
@@ -177,11 +186,18 @@ export async function generateMonthlyPayroll(month: number, year: number, forceR
   if (workingDaysInMonth === 0) workingDaysInMonth = 26;
 
   const existingRecords = await prisma.payrollRecord.findMany({
-    where: { month, year }
+    where: {
+      ...(tenantId ? { tenantId } : {}),
+      month,
+      year
+    }
   });
 
   const yearRecords = await prisma.payrollRecord.findMany({
-    where: { year }
+    where: {
+      ...(tenantId ? { tenantId } : {}),
+      year
+    }
   });
 
   const payrollsToUpsert = [];

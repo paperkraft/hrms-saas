@@ -2,10 +2,18 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export async function getHolidays() {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const holidays = await prisma.publicHoliday.findMany({
+      where: tenantId
+        ? { OR: [{ tenantId }, { tenantId: null }] }
+        : undefined,
       orderBy: { date: "asc" },
     });
     return { success: true, data: holidays };
@@ -17,8 +25,12 @@ export async function getHolidays() {
 
 export async function addHoliday(name: string, date: Date) {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const holiday = await prisma.publicHoliday.create({
       data: {
+        tenantId,
         name,
         date,
       },
@@ -40,6 +52,20 @@ export async function addHoliday(name: string, date: Date) {
 
 export async function updateHoliday(id: string, name: string, date: Date) {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
+    const existing = await prisma.publicHoliday.findFirst({
+      where: {
+        id,
+        ...(tenantId ? { tenantId } : {})
+      }
+    });
+
+    if (!existing) {
+      return { success: false, error: "Holiday not found or unauthorized." };
+    }
+
     const holiday = await prisma.publicHoliday.update({
       where: { id },
       data: {
@@ -64,6 +90,20 @@ export async function updateHoliday(id: string, name: string, date: Date) {
 
 export async function deleteHoliday(id: string) {
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
+    const existing = await prisma.publicHoliday.findFirst({
+      where: {
+        id,
+        ...(tenantId ? { tenantId } : {})
+      }
+    });
+
+    if (!existing) {
+      return { success: false, error: "Holiday not found or unauthorized." };
+    }
+
     await prisma.publicHoliday.delete({
       where: { id },
     });
@@ -84,8 +124,12 @@ export async function getUpcomingHolidays(limit: number = 5) {
   now.setHours(0, 0, 0, 0);
 
   try {
+    const session = await getServerSession(authOptions);
+    const tenantId = session?.user?.tenantId;
+
     const holidays = await prisma.publicHoliday.findMany({
       where: {
+        ...(tenantId ? { OR: [{ tenantId }, { tenantId: null }] } : {}),
         date: {
           gte: now,
         },

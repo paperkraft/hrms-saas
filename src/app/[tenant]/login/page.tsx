@@ -94,7 +94,7 @@ export default async function TenantLoginPage({
 
       {/* Right Column: Authentication Form */}
       <div className="flex-1 flex items-center justify-center p-8 sm:p-12 lg:p-16">
-        <LoginForm />
+        <LoginForm tenantSlug={tenant.slug} />
       </div>
     </div>
   );

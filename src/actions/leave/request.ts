@@ -42,8 +42,10 @@ export async function submitLeaveRequest(formData: unknown) {
     }
 
     // Fetch public holidays in the leave date range
+    const userTenantId = session.user.tenantId;
     const holidays = await prisma.publicHoliday.findMany({
       where: {
+        ...(userTenantId ? { OR: [{ tenantId: userTenantId }, { tenantId: null }] } : {}),
         date: {
           gte: new Date(startDate.getFullYear(), startDate.getMonth(), 1),
           lte: new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0, 23, 59, 59)

@@ -40,11 +40,14 @@ export default async function ProjectMasterReportPage() {
       }
     }),
     prisma.user.findMany({
-      where: { managerId: session.user.id },
+      where: {
+        ...(session?.user?.tenantId ? { tenantId: session.user.tenantId } : {}),
+        managerId: session?.user?.id
+      },
       select: { id: true, name: true, email: true, departmentId: true }
     }),
     prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: session?.user?.id || "" },
       include: {
         departments: { select: { departmentId: true } },
         department: {
@@ -91,7 +94,10 @@ export default async function ProjectMasterReportPage() {
   const ledDepartmentIds = Array.from(ledDepartmentIdsSet)
 
   const rawUsers = await prisma.user.findMany({
-    where: { status: "ACTIVE" },
+    where: {
+      ...(session?.user?.tenantId ? { tenantId: session.user.tenantId } : {}),
+      status: "ACTIVE"
+    },
     select: { id: true, name: true, email: true, departmentId: true, role: true, ledDepartments: { select: { id: true } } },
     orderBy: { name: 'asc' }
   })
@@ -216,11 +222,15 @@ export default async function ProjectMasterReportPage() {
     } else {
       const [pResult, dResult] = await Promise.all([
         prisma.project.findMany({
-          where: { status: "ACTIVE" },
+          where: {
+            ...(session?.user?.tenantId ? { tenantId: session.user.tenantId } : {}),
+            status: "ACTIVE"
+          },
           select: { id: true, name: true },
           orderBy: { name: 'asc' }
         }),
         prisma.department.findMany({
+          where: session?.user?.tenantId ? { tenantId: session.user.tenantId } : {},
           include: { taskMasters: true, parentDepartment: { select: { id: true, name: true } } },
           orderBy: { name: 'asc' }
         })

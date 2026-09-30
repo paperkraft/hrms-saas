@@ -27,6 +27,8 @@ import {
   Globe,
   Layers,
   Check,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { updateUser } from "@/actions/user"
@@ -112,6 +114,7 @@ export function EditUserDialog({
   })
 
   const [primaryRoleId, setPrimaryRoleId] = useState<string>(initialPrimaryRole)
+  const [showPassword, setShowPassword] = useState<boolean>(false)
   const [isExternal, setIsExternal] = useState<boolean>(() => {
     return Boolean(user.isExternal || user.roleDefinition?.isExternal || user.role === 'EXTERNAL_USER' || user.role === 'EXTERNAL')
   })
@@ -280,12 +283,27 @@ export function EditUserDialog({
                   <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     Password (leave blank to keep current)
                   </Label>
-                  <Input
-                    type="password"
-                    name="password"
-                    placeholder="••••••••"
-                    className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      placeholder="••••••••"
+                      className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none p-0.5 rounded cursor-pointer"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="size-4" />
+                      ) : (
+                        <Eye className="size-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2 p-2.5 sm:p-3 rounded-md bg-muted/20 border border-border/70">

@@ -22,20 +22,32 @@ export async function createUser(data: any) {
     const session = await authorizeUserManagement()
     const hashedPassword = await bcrypt.hash(data.password, 10)
 
+    const tenantId = data.tenantId || session.user.tenantId;
+    if (!tenantId) return { success: false, error: "Tenant ID is required to create a user." };
+
     // Multi-role resolution: collect all assigned role definitions
     let selectedRoleDefs: any[] = []
     if (Array.isArray(data.roleDefinitionIds) && data.roleDefinitionIds.length > 0) {
       selectedRoleDefs = await prisma.roleDefinition.findMany({
-        where: { id: { in: data.roleDefinitionIds } }
+        where: {
+          tenantId,
+          id: { in: data.roleDefinitionIds }
+        }
       })
     } else if (data.roleDefinitionId) {
-      const def = await prisma.roleDefinition.findUnique({
-        where: { id: data.roleDefinitionId }
+      const def = await prisma.roleDefinition.findFirst({
+        where: {
+          tenantId,
+          id: data.roleDefinitionId
+        }
       })
       if (def) selectedRoleDefs = [def]
     } else if (data.role) {
       const def = await prisma.roleDefinition.findFirst({
-        where: { code: data.role }
+        where: {
+          tenantId,
+          code: data.role
+        }
       })
       if (def) selectedRoleDefs = [def]
     }
@@ -75,9 +87,6 @@ export async function createUser(data: any) {
         initialManagerId = dept.teamLeaderId
       }
     }
-
-    const tenantId = data.tenantId || session.user.tenantId;
-    if (!tenantId) return { success: false, error: "Tenant ID is required to create a user." };
 
     const user = await prisma.user.create({
       data: {
@@ -132,7 +141,7 @@ export async function createUser(data: any) {
     if (!user.isExternal && user.status === "ACTIVE") {
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
-      await ensureBalance(user.id, currentMonth, currentYear);
+      await ensureBalance(user.id, currentMonth, currentYear, undefined, tenantId);
     }
 
     revalidatePath("/dashboard/admin/users")
@@ -145,22 +154,32 @@ export async function createUser(data: any) {
 
 export async function updateUser(id: string, data: any) {
   try {
-    await authorizeUserManagement()
+    const session = await authorizeUserManagement()
+    const tenantId = session?.user?.tenantId
 
     // Multi-role resolution: collect all assigned role definitions
     let selectedRoleDefs: any[] = []
     if (Array.isArray(data.roleDefinitionIds) && data.roleDefinitionIds.length > 0) {
       selectedRoleDefs = await prisma.roleDefinition.findMany({
-        where: { id: { in: data.roleDefinitionIds } }
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          id: { in: data.roleDefinitionIds }
+        }
       })
     } else if (data.roleDefinitionId) {
-      const def = await prisma.roleDefinition.findUnique({
-        where: { id: data.roleDefinitionId }
+      const def = await prisma.roleDefinition.findFirst({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          id: data.roleDefinitionId
+        }
       })
       if (def) selectedRoleDefs = [def]
     } else if (data.role) {
       const def = await prisma.roleDefinition.findFirst({
-        where: { code: data.role }
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          code: data.role
+        }
       })
       if (def) selectedRoleDefs = [def]
     }
@@ -657,10 +676,14 @@ export async function getAdminUsersData() {
     const session = await authorizeUserManagement()
     const tenantId = session?.user?.tenantId;
 
+    if (!tenantId) {
+      return { success: false, error: "Unauthorized: Tenant context is required." };
+    }
+
     const [users, validManagers, departments, locations, roles] = await Promise.all([
       prisma.user.findMany({
         where: {
-          ...(tenantId ? { tenantId } : {}),
+          tenantId,
           NOT: {
             roleDefinition: {
               code: 'SYSTEM_ADMIN'
@@ -687,7 +710,7 @@ export async function getAdminUsersData() {
       }),
       prisma.user.findMany({
         where: {
-          ...(tenantId ? { tenantId } : {}),
+          tenantId,
           status: 'ACTIVE',
           NOT: {
             roleDefinition: {
@@ -699,18 +722,18 @@ export async function getAdminUsersData() {
         orderBy: { name: 'asc' }
       }),
       prisma.department.findMany({
-        where: tenantId ? { tenantId } : {},
+        where: { tenantId },
         select: { id: true, name: true, teamLeaderId: true },
         orderBy: { name: 'asc' }
       }),
       prisma.location.findMany({
-        where: tenantId ? { tenantId } : {},
+        where: { tenantId },
         select: { id: true, name: true, isRemote: true },
         orderBy: { name: 'asc' }
       }),
       prisma.roleDefinition.findMany({
         where: {
-          ...(tenantId ? { tenantId } : {}),
+          tenantId,
           code: { not: 'SYSTEM_ADMIN' }
         },
         orderBy: [
@@ -740,9 +763,13 @@ export async function getEmployeesForDropdown() {
     const session = await getServerSession(authOptions);
     const tenantId = session?.user?.tenantId;
 
+    if (!tenantId) {
+      return { success: true, data: [] };
+    }
+
     const users = await prisma.user.findMany({
       where: {
-        ...(tenantId ? { tenantId } : {}),
+        tenantId,
         status: 'ACTIVE',
         NOT: {
           roleDefinition: {

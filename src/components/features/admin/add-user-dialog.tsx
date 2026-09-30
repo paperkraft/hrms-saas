@@ -31,6 +31,8 @@ import {
   UserCheck,
   Globe,
   Check,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createUser } from "@/actions/user"
@@ -84,6 +86,7 @@ export function AddUserDialog({
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([defaultPrimary].filter(Boolean))
   const [primaryRoleId, setPrimaryRoleId] = useState<string>(defaultPrimary)
   const [isExternal, setIsExternal] = useState<boolean>(false)
+  const [showPassword, setShowPassword] = useState<boolean>(false)
 
   const toggleRole = (roleId: string) => {
     setSelectedRoleIds(prev => {
@@ -225,13 +228,28 @@ export function AddUserDialog({
                   <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     Initial Password <span className="text-rose-500">*</span>
                   </Label>
-                  <Input
-                    type="password"
-                    name="password"
-                    required
-                    placeholder="Minimum 6 characters"
-                    className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      required
+                      placeholder="Minimum 6 characters"
+                      className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none p-0.5 rounded cursor-pointer"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="size-4" />
+                      ) : (
+                        <Eye className="size-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2 p-2.5 sm:p-3 rounded-md bg-muted/20 border border-border/70">

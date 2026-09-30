@@ -76,7 +76,9 @@ export async function getProjects() {
     // Visibility Logic:
     // External users: only see projects explicitly shared with them
     // Internal users: see all projects
-    let whereClause: any = {}
+    let whereClause: any = {
+      ...(session.user.tenantId ? { tenantId: session.user.tenantId } : {})
+    }
     if (isExternal) {
       whereClause.shares = {
         some: { userId: session.user.id }

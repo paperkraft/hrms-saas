@@ -25,7 +25,11 @@ async function authorizeAdmin() {
 
 export async function getDepartments() {
   try {
+    const session = await getServerSession(authOptions)
+    const tenantId = session?.user?.tenantId
+
     const departments = await prisma.department.findMany({
+      where: tenantId ? { tenantId } : {},
       include: {
         teamLeader: {
           select: {
@@ -306,7 +310,11 @@ export async function deleteDepartment(id: string, fallbackDepartmentId?: string
 
 export async function getAdminDepartmentsData() {
   try {
+    const session = await getServerSession(authOptions)
+    const tenantId = session?.user?.tenantId
+
     const departments = await prisma.department.findMany({
+      where: tenantId ? { tenantId } : {},
       include: {
         teamLeader: {
           select: { id: true, name: true, email: true, avatarUrl: true, designation: true, status: true }
@@ -433,6 +441,7 @@ export async function getAdminDepartmentsData() {
 
     const users = await prisma.user.findMany({
       where: {
+        ...(tenantId ? { tenantId } : {}),
         status: { notIn: ['RESIGNED', 'TERMINATED'] },
         NOT: [
           { email: { in: [appConfig.devAdminEmail, "dev@sigma.com"] } },

@@ -16,9 +16,11 @@ export async function calculateAttendanceStatusFlags(
     include: { location: true }
   });
 
-  const config = await prisma.systemConfig.findUnique({
-    where: { id: "GLOBAL_CONFIG" }
-  });
+  const config = user?.tenantId
+    ? await prisma.systemConfig.findUnique({
+        where: { tenantId: user.tenantId }
+      })
+    : null;
 
   const startTime = user?.location?.startTime || config?.defaultOfficeStartTime || "09:00";
   const endTime = user?.location?.endTime || config?.defaultOfficeEndTime || "18:00";

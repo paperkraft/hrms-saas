@@ -27,6 +27,7 @@ import { updateSelfProfile } from "@/actions/user";
 import { Spinner } from "@/components/ui/spinner";
 import { format } from "date-fns";
 import { Separator } from "@/components/ui/separator";
+import { Eye, EyeOff } from "lucide-react";
 
 const profileSchema = z.object({
   phoneNumber: z.string().optional().or(z.literal("")),
@@ -57,6 +58,7 @@ interface ProfileDialogProps {
 
 export function ProfileDialog({ user, open, onOpenChange }: ProfileDialogProps) {
   const [isPending, setIsPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<z.infer<typeof profileSchema>>({
     resolver: zodResolver(profileSchema),
@@ -244,7 +246,27 @@ export function ProfileDialog({ user, open, onOpenChange }: ProfileDialogProps) 
                       <FormItem className="space-y-1.5 max-w-sm">
                         <FormLabel className="text-xs font-semibold text-foreground">New Password</FormLabel>
                         <FormControl>
-                          <Input type="password" {...field} placeholder="Leave blank to keep current" className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20" />
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              {...field}
+                              placeholder="Leave blank to keep current"
+                              className="h-9 text-xs rounded-md bg-background border-border/80 focus:ring-primary/20 pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((prev) => !prev)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none p-0.5 rounded cursor-pointer"
+                              aria-label={showPassword ? "Hide password" : "Show password"}
+                              tabIndex={-1}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="size-4" />
+                              ) : (
+                                <Eye className="size-4" />
+                              )}
+                            </button>
+                          </div>
                         </FormControl>
                         <p className="text-[10px] text-muted-foreground/60 font-medium px-0.5">Ensure your password is at least 6 characters long.</p>
                         <FormMessage className="text-xs font-medium" />
