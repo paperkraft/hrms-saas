@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { isExternalUser } from "@/lib/permissions";
+import { setSuperAdminSessionCookie } from "@/lib/super-admin-auth";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -32,15 +33,17 @@ export const authOptions: NextAuthOptions = {
         }
 
         const cleanEmail = credentials.email.toLowerCase().trim();
-        const tenantSlug = (credentials as any)?.tenantSlug?.toLowerCase()?.trim();
+        const rawSlug = (credentials as any)?.tenantSlug?.toLowerCase()?.trim();
+        const tenantSlug = (rawSlug && rawSlug !== "undefined" && rawSlug !== "null" && rawSlug !== "") ? rawSlug : undefined;
 
-        let user = await prisma.user.findFirst({
+        // Find candidate user accounts matching the email
+        const candidateUsers = await prisma.user.findMany({
           where: {
             email: { equals: cleanEmail, mode: "insensitive" },
             ...(tenantSlug ? { tenant: { slug: tenantSlug } } : {})
           },
           include: {
-            tenant: { select: { id: true, slug: true, name: true } },
+            tenant: { select: { id: true, slug: true, name: true, status: true } },
             roleDefinition: true,
             departments: {
               include: {
@@ -52,15 +55,35 @@ export const authOptions: NextAuthOptions = {
           }
         });
 
+        let user: (typeof candidateUsers)[0] | null = null;
+
+        for (const candidate of candidateUsers) {
+          if (candidate.password) {
+            const isMatch = await bcrypt.compare(credentials.password, candidate.password);
+            if (isMatch) {
+              user = candidate;
+              break;
+            }
+          }
+        }
+
         if (!user) {
           // Check if this is a Platform Super Admin
           const superAdmin = await prisma.superAdmin.findUnique({
-            where: { email: credentials.email.toLowerCase().trim() },
+            where: { email: cleanEmail },
           });
 
           if (superAdmin && superAdmin.password) {
             const isSuperValid = await bcrypt.compare(credentials.password, superAdmin.password);
             if (isSuperValid) {
+              try {
+                await setSuperAdminSessionCookie({
+                  id: superAdmin.id,
+                  email: superAdmin.email,
+                  name: superAdmin.name,
+                });
+              } catch {}
+
               return {
                 id: superAdmin.id,
                 tenantId: "PLATFORM_ROOT",
@@ -86,14 +109,8 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Invalid email or password");
         }
 
-        if (!user.password) {
-          throw new Error("Invalid email or password");
-        }
-
-        const isValid = await bcrypt.compare(credentials.password, user.password);
-
-        if (!isValid) {
-          throw new Error("Invalid email or password");
+        if (user.tenant && user.tenant.status === "SUSPENDED") {
+          throw new Error("Your organization account is suspended. Please contact support.");
         }
 
         if (user.status && user.status !== "ACTIVE") {
@@ -187,6 +204,7 @@ export const authOptions: NextAuthOptions = {
         token.allowedMenus = user.allowedMenus;
         token.permissions = user.permissions;
         token.isExternal = user.isExternal;
+        token.isSuperAdmin = user.isSuperAdmin || user.role === "SUPER_ADMIN";
       }
       return token;
     },

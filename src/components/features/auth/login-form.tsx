@@ -50,12 +50,17 @@ export function LoginForm({ tenantSlug }: LoginFormProps = {}) {
     setAuthError(null);
 
     try {
-      const result = await signIn("credentials", {
+      const signInData: Record<string, any> = {
         email: data.email,
         password: data.password,
-        tenantSlug: tenantSlug || undefined,
         redirect: false,
-      });
+      };
+
+      if (tenantSlug && tenantSlug !== "undefined" && tenantSlug.trim().length > 0) {
+        signInData.tenantSlug = tenantSlug.trim();
+      }
+
+      const result = await signIn("credentials", signInData);
 
       if (result?.error) {
         if (result.error && result.error !== "CredentialsSignin") {

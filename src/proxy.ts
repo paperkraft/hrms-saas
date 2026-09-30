@@ -47,15 +47,17 @@ export async function proxy(req: NextRequest) {
   const impersonationCookie = req.cookies.get("saas_impersonation_session")?.value;
 
   // 3. Super Admin Route Protection (/super-admin/*)
+  const isSuperAdminAuthenticated = !!superAdminCookie || token?.role === "SUPER_ADMIN" || !!(token as any)?.isSuperAdmin;
+
   if (pathname.startsWith("/super-admin")) {
     if (pathname === "/super-admin/login") {
-      if (superAdminCookie || token?.role === "SUPER_ADMIN") {
+      if (isSuperAdminAuthenticated) {
         return NextResponse.redirect(new URL("/super-admin", req.url));
       }
       return NextResponse.next();
     }
 
-    if (!superAdminCookie && token?.role !== "SUPER_ADMIN") {
+    if (!isSuperAdminAuthenticated) {
       const loginUrl = new URL("/super-admin/login", req.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(loginUrl);

@@ -34,6 +34,50 @@ export async function loginSuperAdmin(formData: FormData) {
   }
 
   await setSuperAdminSessionCookie(session);
+
+  // Synchronize NextAuth session token with Super Admin identity
+  const secret = process.env.NEXTAUTH_SECRET || "super-admin-hrms-platform-secret-key-2026";
+  const superAdminToken = await encode({
+    token: {
+      id: session.id,
+      sub: session.id,
+      email: session.email,
+      name: session.name || "Platform Super Admin",
+      role: "SUPER_ADMIN",
+      roleId: "SUPER_ADMIN",
+      roleName: "Super Administrator",
+      tenantId: "PLATFORM_ROOT",
+      tenantSlug: "super-admin",
+      isTeamLeader: false,
+      isSuperAdmin: true,
+      allowedMenus: ["all"],
+      permissions: ["all"],
+      isExternal: false,
+    },
+    secret,
+    maxAge: 7 * 24 * 60 * 60,
+  });
+
+  const cookieStore = await cookies();
+  const isSecure = process.env.NODE_ENV === "production";
+  cookieStore.set("next-auth.session-token", superAdminToken, {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60,
+  });
+
+  if (isSecure) {
+    cookieStore.set("__Secure-next-auth.session-token", superAdminToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+  }
+
   return { success: true, redirectUrl: "/super-admin" };
 }
 
@@ -811,14 +855,35 @@ export async function startImpersonation(tenantId: string, targetUserId?: string
  */
 export async function stopImpersonation() {
   const session = await getImpersonationSession();
+  const existingSuperAdminSession = await getSuperAdminSession();
+
+  let superAdminId = session?.superAdminId || existingSuperAdminSession?.id;
+  let superAdminEmail = session?.superAdminEmail || existingSuperAdminSession?.email;
+  let superAdminName = existingSuperAdminSession?.name || "Platform Super Admin";
+
+  if (!superAdminId || !superAdminEmail) {
+    const defaultAdmin = await prisma.superAdmin.findFirst({
+      orderBy: { createdAt: "asc" },
+    });
+    if (defaultAdmin) {
+      superAdminId = defaultAdmin.id;
+      superAdminEmail = defaultAdmin.email;
+      superAdminName = defaultAdmin.name;
+    } else {
+      superAdminId = "PLATFORM_ROOT";
+      superAdminEmail = "superadmin@hrms.com";
+      superAdminName = "Platform Super Admin";
+    }
+  }
+
   if (session) {
     try {
       await prisma.activityLog.create({
         data: {
           tenantId: session.tenantId,
-          userId: session.targetUserId || session.superAdminId,
+          userId: session.targetUserId || superAdminId,
           action: "SUPPORT_IMPERSONATION_ENDED",
-          details: `Super Admin ${session.superAdminEmail} ended support impersonation session for ${session.tenantName}.`,
+          details: `Super Admin ${session.superAdminEmail || superAdminEmail} ended support impersonation session for ${session.tenantName}.`,
         },
       });
     } catch (e) {
@@ -826,9 +891,59 @@ export async function stopImpersonation() {
     }
   }
 
+  // 1. Re-establish Super Admin custom session cookie
+  await setSuperAdminSessionCookie({
+    id: superAdminId,
+    email: superAdminEmail,
+    name: superAdminName,
+  });
+
+  // 2. Re-establish Super Admin NextAuth JWT session token
+  const secret = process.env.NEXTAUTH_SECRET || "super-admin-hrms-platform-secret-key-2026";
+  const superAdminToken = await encode({
+    token: {
+      id: superAdminId,
+      sub: superAdminId,
+      email: superAdminEmail,
+      name: superAdminName,
+      role: "SUPER_ADMIN",
+      roleId: "SUPER_ADMIN",
+      roleName: "Super Administrator",
+      tenantId: "PLATFORM_ROOT",
+      tenantSlug: "super-admin",
+      isTeamLeader: false,
+      isSuperAdmin: true,
+      allowedMenus: ["all"],
+      permissions: ["all"],
+      isExternal: false,
+    },
+    secret,
+    maxAge: 7 * 24 * 60 * 60,
+  });
+
   const cookieStore = await cookies();
-  cookieStore.delete("next-auth.session-token");
-  cookieStore.delete("__Secure-next-auth.session-token");
+  const isSecure = process.env.NODE_ENV === "production";
+
+  cookieStore.set("next-auth.session-token", superAdminToken, {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60,
+  });
+
+  if (isSecure) {
+    cookieStore.set("__Secure-next-auth.session-token", superAdminToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+  }
+
+  // 3. Clear impersonation cookie
   await clearImpersonationSessionCookie();
+
   return { success: true, redirectUrl: "/super-admin/tenants" };
 }
