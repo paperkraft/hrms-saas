@@ -613,9 +613,8 @@ export async function startImpersonation(tenantId: string, targetUserId?: string
           ? { id: targetUserId }
           : {
               OR: [
-                { role: "ADMIN" },
+                { role: Role.ADMIN },
                 { roleDefinition: { code: "ADMIN" } },
-                { role: "SUPER_ADMIN" },
               ],
             },
         include: {
